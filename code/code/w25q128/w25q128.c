@@ -1,0 +1,8 @@
+#include "w25q128.h"
+static void cs(GPIO_PinState s){HAL_GPIO_WritePin(W25Q128_CS_PORT,W25Q128_CS_PIN,s);}
+static HAL_StatusTypeDef cmd(SPI_HandleTypeDef*h,uint8_t c,uint32_t t){cs(GPIO_PIN_RESET);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,&c,1,t);cs(GPIO_PIN_SET);return s;}
+static HAL_StatusTypeDef wait(SPI_HandleTypeDef*h,uint32_t t){uint8_t c=0x05,sr;uint32_t st=HAL_GetTick();do{cs(0);if(HAL_SPI_Transmit(h,&c,1,t)!=HAL_OK){cs(1);return HAL_ERROR;}if(HAL_SPI_Receive(h,&sr,1,t)!=HAL_OK){cs(1);return HAL_ERROR;}cs(1);}while((sr&1U)&&((HAL_GetTick()-st)<t));return(sr&1U)?HAL_TIMEOUT:HAL_OK;}
+HAL_StatusTypeDef W25Q128_ReadJedec(SPI_HandleTypeDef*h,uint8_t id[3],uint32_t t){uint8_t c=0x9F;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,&c,1,t);if(s==HAL_OK)s=HAL_SPI_Receive(h,id,3,t);cs(1);return s;}
+HAL_StatusTypeDef W25Q128_Read(SPI_HandleTypeDef*h,uint32_t a,uint8_t*b,uint32_t n,uint32_t t){uint8_t c[4]={3,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);if(s==HAL_OK)s=HAL_SPI_Receive(h,b,n,t);cs(1);return s;}
+HAL_StatusTypeDef W25Q128_Write(SPI_HandleTypeDef*h,uint32_t a,const uint8_t*b,uint32_t n,uint32_t t){uint8_t c[4]={2,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};if(n>256)return HAL_ERROR;uint8_t w=6;if(cmd(h,w,t)!=HAL_OK)return HAL_ERROR;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);if(s==HAL_OK)s=HAL_SPI_Transmit(h,(uint8_t*)b,n,t);cs(1);if(s!=HAL_OK)return s;return wait(h,t);}
+HAL_StatusTypeDef W25Q128_EraseSector(SPI_HandleTypeDef*h,uint32_t a,uint32_t t){uint8_t c[4]={0x20,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};if(cmd(h,6,t)!=HAL_OK)return HAL_ERROR;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);cs(1);if(s!=HAL_OK)return s;return wait(h,t);}
