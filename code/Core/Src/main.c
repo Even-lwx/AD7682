@@ -104,6 +104,16 @@ int main(void)
   MX_I2C1_Init();
   MX_USART1_UART_Init();
   Debug_Print("\r\nAD7682 board driver test start\r\n");
+  {
+    char clock_line[128];
+    (void)snprintf(clock_line, sizeof(clock_line),
+                   "Clock: SYS=%lu HCLK=%lu HSE_READY=%u RCC_CR=0x%08lX\r\n",
+                   (unsigned long)HAL_RCC_GetSysClockFreq(),
+                   (unsigned long)HAL_RCC_GetHCLKFreq(),
+                   (unsigned)__HAL_RCC_GET_FLAG(RCC_FLAG_HSERDY),
+                   (unsigned long)RCC->CR);
+    Debug_Print(clock_line);
+  }
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
