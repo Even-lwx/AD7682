@@ -22,14 +22,6 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
-#include "i2c.h"
-#include "stdio.h"
-#include "string.h"
-#include "ad7682.h"
-#include "battery_adc.h"
-#include "sht41.h"
-#include "pcf8563.h"
-#include "w25q128.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -102,19 +94,7 @@ int main(void)
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_SPI2_Init();
-  MX_I2C1_Init();
   MX_USART1_UART_Init();
-  Debug_Print("\r\nAD7682 board driver test start\r\n");
-  {
-    char clock_line[128];
-    (void)snprintf(clock_line, sizeof(clock_line),
-                   "Clock: SYS=%lu HCLK=%lu HSE_READY=%u RCC_CR=0x%08lX\r\n",
-                   (unsigned long)HAL_RCC_GetSysClockFreq(),
-                   (unsigned long)HAL_RCC_GetHCLKFreq(),
-                   (unsigned)__HAL_RCC_GET_FLAG(RCC_FLAG_HSERDY),
-                   (unsigned long)RCC->CR);
-    Debug_Print(clock_line);
-  }
   /* USER CODE BEGIN 2 */
   /* Run once per boot, not every second, to limit flash erase wear. */
   Debug_FlashReadWriteTest();
@@ -134,138 +114,6 @@ int main(void)
   /* USER CODE END 3 */
 }
 
-static void Debug_Print(const char *text)
-{
-  HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), 100);
-}
-
-/* W25Q128JV: 16 MiB, 4 KiB sectors, 256-byte pages.
-   Commands 03h/06h/02h/20h/05h: read/WREN/program/erase/BUSY polling.
-   Uses SPI2 (PA0 SCK, PA4 DI, PB2 DO) and PA2 CS#.
-   Only use the final sector if every byte is initially FF. */
-static void Debug_FlashReadWriteTest(void)
-{
-  const uint32_t address = 0x00FFF000UL;
-  uint8_t tx[256], rx[256], id[3];
-  uint32_t offset, i;
-  HAL_StatusTypeDef status;
-  char line[128];
-
-  Debug_Print("Flash RW test: sector=0xFFF000, once per boot\r\n");
-  status = W25Q128_ReadJedec(&hspi2, id, 100);
-  if (status != HAL_OK || id[0] != 0xEF || id[1] != 0x40 || id[2] != 0x18)
-  {
-    Debug_Print("Flash RW test: SKIP (JEDEC mismatch or SPI error)\r\n");
-    return;
-  }
-  for (offset = 0; offset < 4096; offset += sizeof(rx))
-  {
-    status = W25Q128_Read(&hspi2, address + offset, rx, sizeof(rx), 100);
-    if (status != HAL_OK)
-    {
-      Debug_Print("Flash RW test: FAIL (initial read)\r\n");
-      return;
-    }
-    for (i = 0; i < sizeof(rx); ++i)
-    {
-      if (rx[i] != 0xFF)
-      {
-        Debug_Print("Flash RW test: SKIP (sector contains data; preserved)\r\n");
-        return;
-      }
-    }
-  }
-  status = W25Q128_EraseSector(&hspi2, address, 3000);
-  (void)snprintf(line, sizeof(line), "Flash erase: status=%d\r\n", (int)status);
-  Debug_Print(line);
-  if (status != HAL_OK) return;
-
-  /* Write every possible byte value in a permuted order, one full page. */
-  for (i = 0; i < sizeof(tx); ++i) tx[i] = (uint8_t)(i ^ 0xA5U);
-  status = W25Q128_Write(&hspi2, address, tx, sizeof(tx), 100);
-  (void)snprintf(line, sizeof(line), "Flash write 256 bytes: status=%d\r\n", (int)status);
-  Debug_Print(line);
-  if (status == HAL_OK)
-  {
-    status = W25Q128_Read(&hspi2, address, rx, sizeof(rx), 100);
-    (void)snprintf(line, sizeof(line), "Flash read: status=%d\r\n", (int)status);
-    Debug_Print(line);
-    if (status == HAL_OK)
-    {
-      for (i = 0; i < sizeof(tx); ++i) if (tx[i] != rx[i]) break;
-      if (i == sizeof(tx)) Debug_Print("Flash compare: PASS (256/256 bytes)\r\n");
-      else
-      {
-        (void)snprintf(line, sizeof(line),
-                       "Flash compare: FAIL offset=%lu expected=%02X actual=%02X\r\n",
-                       (unsigned long)i, tx[i], rx[i]);
-        Debug_Print(line);
-      }
-    }
-  }
-  /* Restore this originally blank sector, then verify the entire erase. */
-  status = W25Q128_EraseSector(&hspi2, address, 3000);
-  if (status != HAL_OK)
-  {
-    Debug_Print("Flash cleanup: FAIL (test data may remain at 0xFFF000)\r\n");
-    return;
-  }
-  for (offset = 0; offset < 4096; offset += sizeof(rx))
-  {
-    status = W25Q128_Read(&hspi2, address + offset, rx, sizeof(rx), 100);
-    if (status != HAL_OK) break;
-    for (i = 0; i < sizeof(rx); ++i) if (rx[i] != 0xFF) break;
-    if (i != sizeof(rx)) break;
-  }
-  Debug_Print(offset == 4096 ? "Flash cleanup: PASS (4096 bytes FF)\r\n" :
-                              "Flash cleanup: FAIL (erase verification)\r\n");
-}
-
-static void Debug_RunTests(void)
-{
-  char line[160];
-  uint16_t ad_code = 0;
-  uint32_t battery_code;
-  float battery_voltage;
-  uint8_t jedec[3] = {0};
-  float temperature = 0.0f, humidity = 0.0f;
-  uint8_t voltage_low = 0;
-  PCF8563_DateTime rtc = {0};
-  AD7682_Handle ad = {0};
-  AD7682_Status ad_status;
-  HAL_StatusTypeDef status;
-
-  AD7682_Init(&ad, &hspi1, 3.3f); /* Used only for handle setup; raw code is printed. */
-  ad_status = AD7682_ReadRaw(&ad, &ad_code, 10);
-  (void)snprintf(line, sizeof(line), "AD7682 raw: status=%d code=%u\r\n",
-                 (int)ad_status, (unsigned)ad_code);
-  Debug_Print(line);
-
-  battery_code = BatteryAdc_ReadRaw(&hadc1, 10);
-  battery_voltage = BatteryAdc_CalibratedVoltage(battery_code);
-  (void)snprintf(line, sizeof(line), "Battery ADC raw: %lu voltage: %.3f V\r\n",
-                 (unsigned long)battery_code, (double)battery_voltage);
-  Debug_Print(line);
-
-  status = SHT41_Read(&hi2c1, &temperature, &humidity, 100);
-  (void)snprintf(line, sizeof(line), "SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",
-                 (int)status, (double)temperature, (double)humidity);
-  Debug_Print(line);
-
-  (void)PCF8563_GetVoltageLow(&hi2c1, &voltage_low, 100);
-  status = PCF8563_ReadDateTime(&hi2c1, &rtc, 100);
-  (void)snprintf(line, sizeof(line),
-                 "PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",
-                 (int)status, (unsigned)rtc.year, (unsigned)rtc.month,
-                 (unsigned)rtc.day, (unsigned)rtc.hours, (unsigned)rtc.minutes,
-                 (unsigned)rtc.seconds, (unsigned)voltage_low);
-  Debug_Print(line);
-  status = W25Q128_ReadJedec(&hspi2, jedec, 100);
-  (void)snprintf(line, sizeof(line), "W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",
-                 (int)status, jedec[0], jedec[1], jedec[2]);
-  Debug_Print(line);
-}
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -282,14 +130,14 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  /* Board oscillator: 8 MHz crystal on PF0/PF1, as shown in Sheet1.SchDoc. */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
-  /* 8 MHz HSE x 16 / 2 = 64 MHz SYSCLK. */
-  RCC_OscInitStruct.PLL.PLLN = 16;
+  RCC_OscInitStruct.PLL.PLLN = 8;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
@@ -312,6 +160,9 @@ void SystemClock_Config(void)
   }
 }
 
+static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
+static void Debug_FlashReadWriteTest(void){uint8_t tx[16],rx[16],id[3];uint32_t i;HAL_StatusTypeDef s;char l[96];s=W25Q128_ReadJedec(&hspi2,id,100);if(s!=HAL_OK||id[0]!=0xEF||id[1]!=0x40||id[2]!=0x18){Debug_Print("Flash test: SKIP\r\n");return;}s=W25Q128_EraseSector(&hspi2,0xFFF000,3000);if(s!=HAL_OK){Debug_Print("Flash erase: FAIL\r\n");return;}for(i=0;i<sizeof(tx);i++)tx[i]=(uint8_t)(i^0xA5);s=W25Q128_Write(&hspi2,0xFFF000,tx,sizeof(tx),100);if(s==HAL_OK)s=W25Q128_Read(&hspi2,0xFFF000,rx,sizeof(rx),100);for(i=0;i<sizeof(tx)&&s==HAL_OK;i++)if(tx[i]!=rx[i])break;(void)snprintf(l,sizeof(l),"Flash RW test: %s\r\n",(s==HAL_OK&&i==sizeof(tx))?"PASS":"FAIL");Debug_Print(l);(void)W25Q128_EraseSector(&hspi2,0xFFF000,3000);}
+static void Debug_RunTests(void){char l[160];uint32_t b;float bv,t=0,r=0;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};HAL_StatusTypeDef s;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
