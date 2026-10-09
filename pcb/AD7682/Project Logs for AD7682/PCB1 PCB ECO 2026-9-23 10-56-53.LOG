@@ -1,0 +1,4 @@
+Added Pin To Net: NetName=NetR26_1 Pin=R26-1
+Added Pin To Net: NetName=NetR26_1 Pin=U9-9
+Added Net: Name=NetR26_1
+Added Member To Class: ClassName=Sheet1 Member=Component C32 cc0402krx7r7bb104

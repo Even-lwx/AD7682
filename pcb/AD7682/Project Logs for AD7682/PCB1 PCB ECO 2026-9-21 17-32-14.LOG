@@ -1,0 +1,20 @@
+Added Pin To Net: NetName=NetR13_1 Pin=R13-1
+Added Pin To Net: NetName=NetR13_1 Pin=R14-2
+Added Pin To Net: NetName=NetR13_1 Pin=SW2-2
+Added Net: Name=NetR13_1
+Added Pin To Net: NetName=NetR18_1 Pin=R18-1
+Added Pin To Net: NetName=NetR18_1 Pin=R19-2
+Added Pin To Net: NetName=NetR18_1 Pin=SW3-2
+Added Net: Name=NetR18_1
+Added Member To Class: ClassName=Sheet1 Member=Component C4 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C8 cga0402x5r105k500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C13 cc0402jrnpo9bn101
+Added Member To Class: ClassName=Sheet1 Member=Component C14 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C15 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C16 cga0402x5r105k500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C17 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C20 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component R4 0201wmf470jtee
+Added Member To Class: ClassName=Sheet1 Member=Component R5 frc0402f1002ts
+Added Member To Class: ClassName=Sheet1 Member=Component R8 frc0402f1000ts
+Added Member To Class: ClassName=Sheet1 Member=Component R10 frc0402f0000ts

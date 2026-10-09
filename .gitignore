@@ -1,0 +1,8 @@
+# Local analysis artifacts
+tmp_bq24040.pdf
+tmp_bq24040.txt
+
+# IDE/user-local files
+*.user
+*.suo
+*.userprefs

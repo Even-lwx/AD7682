@@ -1,0 +1,92 @@
+Removed Pin From Net: NetName=3V Pin=C27-1
+Removed Pin From Net: NetName=3V Pin=U9-8
+Added Component: Designator=D1(SOD-323_L1.8-W1.3-LS2.5-RD)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current - Rectified"; Value = "1A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/1N5819WS/213850.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "SOD-323_L1.8-W1.3-LS2.5-RD"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Basic Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "电压:40V 电流:1A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "Hottech(合科泰)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "1N5819WS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "db63db13d9e342eb939127d413d6200b"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "SOD-323_L1.8-W1.3-LS2.5-RD"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "104.3305,51.181,0,0,0,0,0,-0.004,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Non-Repetitive Peak Forward Surge Current"; Value = "25A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "SOD-323"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C191023"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "1N5819WS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - DC Reverse(Vr)"; Value = "40V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Forward(Vf@If)"; Value = "600mV@1A"; VariantName = "[No Variations]"
+Added Component: Designator=D2(SOD-323_L1.8-W1.3-LS2.5-RD)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current - Rectified"; Value = "1A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/1N5819WS/213850.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "SOD-323_L1.8-W1.3-LS2.5-RD"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Basic Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "电压:40V 电流:1A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "Hottech(合科泰)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "1N5819WS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "db63db13d9e342eb939127d413d6200b"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "SOD-323_L1.8-W1.3-LS2.5-RD"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "104.3305,51.181,0,0,0,0,0,-0.004,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Non-Repetitive Peak Forward Surge Current"; Value = "25A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "SOD-323"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C191023"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "1N5819WS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - DC Reverse(Vr)"; Value = "40V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Forward(Vf@If)"; Value = "600mV@1A"; VariantName = "[No Variations]"
+Added Component: Designator=U12(BAT-SMD_CR1220-2ZX)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Battery Type"; Value = "CR1220"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Connector Type"; Value = "电池底座"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Contact Material"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Contact Plating"; Value = "金"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/XDCR-1220-006/8568589.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "BAT-SMD_CR1220-2ZX"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "电池座CR1220贴片式镀金 电池底座配套电池型号：CR1220-3V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "LX(连欣科技)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "XDCR-1220-006"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "aa69efc108b9406287881e5b236f6e7a"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "BAT-SMD_CR1220-2"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "777.81069,586.46209,0,180,0,0,-19.685,0,-31.496"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "SMD"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C7498147"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "XDCR-1220-006"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=3V Pin=D1-2
+Added Pin To Net: NetName=GND Pin=U12-2
+Added Pin To Net: NetName=NetC27_1 Pin=C27-1
+Added Pin To Net: NetName=NetC27_1 Pin=D1-1
+Added Pin To Net: NetName=NetC27_1 Pin=D2-1
+Added Pin To Net: NetName=NetC27_1 Pin=U9-8
+Added Net: Name=NetC27_1
+Added Pin To Net: NetName=NetD2_2 Pin=D2-2
+Added Pin To Net: NetName=NetD2_2 Pin=U12-1
+Added Net: Name=NetD2_2
+Added Member To Class: ClassName=Sheet1 Member=Component C23 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C25 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component C27 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C28 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C29 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C30 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component D1 1n5819ws_c191023
+Added Member To Class: ClassName=Sheet1 Member=Component D2 1n5819ws_c191023
+Added Member To Class: ClassName=Sheet1 Member=Component R11 frc0402f1000ts
+Added Member To Class: ClassName=Sheet1 Member=Component R12 frc0402f0000ts
+Added Member To Class: ClassName=Sheet1 Member=Component R14 frc0402f1000ts
+Added Member To Class: ClassName=Sheet1 Member=Component R16 frc0402j102 ts
+Added Member To Class: ClassName=Sheet1 Member=Component R19 frc0402j102 ts
+Added Member To Class: ClassName=Sheet1 Member=Component R20 rc0402fr-074k7l
+Added Member To Class: ClassName=Sheet1 Member=Component R23 frc0402f1002ts
+Added Member To Class: ClassName=Sheet1 Member=Component R26 frc0402j102 ts
+Added Member To Class: ClassName=Sheet1 Member=Component U8 fc31m2-32.768-ntlnndtl
+Added Member To Class: ClassName=Sheet1 Member=Component U9 pcf8563ts/5,118
+Added Member To Class: ClassName=Sheet1 Member=Component U12 xdcr-1220-006

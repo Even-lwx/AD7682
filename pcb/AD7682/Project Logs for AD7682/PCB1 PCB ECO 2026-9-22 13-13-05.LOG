@@ -1,0 +1,33 @@
+Removed Pin From Net: NetName=3V Pin=C16-1
+Removed Pin From Net: NetName=3V Pin=C17-1
+Removed Pin From Net: NetName=3V Pin=U5-1
+Removed Pin From Net: NetName=3V Pin=U5-20
+Added Component: Designator=BEAD1(L1206)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current Rating"; Value = "6A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CBM321609U000T/367610.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "DC Resistance(DCR)"; Value = "10mΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "L1206"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Impedance @ Frequency"; Value = "0Ω@100MHz"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "单路 1206磁珠 阻抗0Ω@100MHz"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "FH(风华)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CBM321609U000T"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "85bdab7b3d4c4074b81d208eb5e865b3"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "L1206_L3.2-W1.6-H1.1"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "125.984,62.835,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Circuits"; Value = "1"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+125℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "1206"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C391206"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CBM321609U000T"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=3V Pin=BEAD1-1
+Added Pin To Net: NetName=NetBEAD1_2 Pin=BEAD1-2
+Added Pin To Net: NetName=NetBEAD1_2 Pin=C16-1
+Added Pin To Net: NetName=NetBEAD1_2 Pin=C17-1
+Added Pin To Net: NetName=NetBEAD1_2 Pin=U5-1
+Added Pin To Net: NetName=NetBEAD1_2 Pin=U5-20
+Added Net: Name=NetBEAD1_2
+Added Member To Class: ClassName=Sheet1 Member=Component BEAD1 cbm321609u000t

@@ -1,0 +1,5 @@
+Removed Pin From Net: NetName=PB0 Pin=U??-2
+Removed Pin From Net: NetName=PB1 Pin=U??-4
+Added Pin To Net: NetName=PB1 Pin=U??-2
+Added Pin To Net: NetName=PB0 Pin=U??-4
+Added Member To Class: ClassName=Sheet1 Member=Component C?? hgc0603r5106m350nthj

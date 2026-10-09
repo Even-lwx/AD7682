@@ -1,0 +1,589 @@
+Removed Pin From Net: NetName=5V Pin=C8-1
+Removed Pin From Net: NetName=5V Pin=C11-1
+Removed Pin From Net: NetName=5V Pin=CN1-1
+Removed Pin From Net: NetName=3V Pin=R16-1
+Removed Pin From Net: NetName=PB12 Pin=R16-2
+Removed Pin From Net: NetName=3V Pin=R17-1
+Removed Pin From Net: NetName=PB11 Pin=R17-2
+Removed Pin From Net: NetName=PB1 Pin=R21-1
+Removed Pin From Net: NetName=3V Pin=R21-2
+Removed Pin From Net: NetName=3V Pin=R22-1
+Removed Pin From Net: NetName=PB0 Pin=R22-2
+Removed Pin From Net: NetName=PA8 Pin=R23-1
+Removed Pin From Net: NetName=3V Pin=R24-1
+Removed Pin From Net: NetName=PB15 Pin=R24-2
+Removed Pin From Net: NetName=5V Pin=U3-1
+Removed Pin From Net: NetName=5V Pin=U3-3
+Removed Pin From Net: NetName=PB1 Pin=U7-2
+Removed Pin From Net: NetName=PB0 Pin=U7-4
+Removed Pin From Net: NetName=3V Pin=U7-5
+Removed Pin From Net: NetName=PA8 Pin=U8-2
+Removed Pin From Net: NetName=PB15 Pin=U8-4
+Change Component Comment : Designator=R17 Old Comment=frc0402f1002ts New Comment=frc0402f1003ts
+Change Component Comment : Designator=R23 Old Comment=rc0402fr-074k7l New Comment=frc0402f1501ts
+Change Component Designator: OldDesignator=C23 NewDesignator=C24
+Change Component Designator: OldDesignator=C24 NewDesignator=C29
+Change Component Designator: OldDesignator=C25 NewDesignator=C30
+Change Component Designator: OldDesignator=C26 NewDesignator=C31
+Change Component Designator: OldDesignator=C27 NewDesignator=C32
+Change Component Designator: OldDesignator=R13 NewDesignator=R14
+Change Component Designator: OldDesignator=R14 NewDesignator=R15
+Change Component Designator: OldDesignator=R15 NewDesignator=R16
+Change Component Designator: OldDesignator=R18 NewDesignator=R20
+Change Component Designator: OldDesignator=R19 NewDesignator=R21
+Change Component Designator: OldDesignator=R20 NewDesignator=R22
+Change Component Designator: OldDesignator=U7 NewDesignator=U10
+Change Component Designator: OldDesignator=U8 NewDesignator=U11
+Change component parameters: Designator = "R17" ("R17"); Footprint = "R0402"; UniqueID = "\UPVVIWNG" ("\UPVVIWNG")
+Change component parameters (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402F1003TS/3180372.html"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "LCSC Part Name"; Value = "100kΩ ±1% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402F1003TS"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "SupplierPart"; Value = "C2906859"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Symbol"; Value = "FRC0402F1003TS"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Value"; Value = "100kΩ"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Change component parameters: Designator = "R23" ("R23"); Footprint = "R0402"; UniqueID = "\PRCXLHWE" ("\PRCXLHWE")
+Change component parameters (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402F1501TS/3279176.html"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "LCSC Part Name"; Value = "1.5kΩ ±1% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402F1501TS"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "SupplierPart"; Value = "C2933074"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Symbol"; Value = "FRC0402F1501TS"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Value"; Value = "1.5kΩ"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=C23(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CC0402KRX7R7BB104/61526.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "100nF ±10% 16V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "YAGEO(国巨)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CC0402KRX7R7BB104"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C60474"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CC0402KRX7R7BB104"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "X7R"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±10%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "100nF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "16V"; VariantName = "[No Variations]"
+Added Component: Designator=C25(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CGA0402C0G120J500GT/47452244.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "12pF ±5% 50V 停产"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "HRE(芯声)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CGA0402C0G120J500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C45359894"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CGA0402C0G120J500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "C0G"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±5%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "12pF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=C26(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CGA0402X5R105K500GT/7062517.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1uF ±10% 50V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "HRE(芯声)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CGA0402X5R105K500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C6119811"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CGA0402X5R105K500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "X5R"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±10%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "1uF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=C27(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CGA0402X5R105K500GT/7062517.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1uF ±10% 50V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "HRE(芯声)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CGA0402X5R105K500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C6119811"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CGA0402X5R105K500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "X5R"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±10%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "1uF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=C28(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CGA0402C0G120J500GT/47452244.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "12pF ±5% 50V 停产"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "HRE(芯声)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CGA0402C0G120J500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C45359894"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CGA0402C0G120J500GT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "C0G"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±5%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "12pF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=C32(C0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/CC0402KRX7R7BB104/61526.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "C0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "100nF ±10% 16V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "YAGEO(国巨)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "CC0402KRX7R7BB104"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "36a51122f27c49738f86b3bfa98863e0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "C0402_L1.0-W0.5-H0.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C60474"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "CC0402KRX7R7BB104"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "X7R"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±10%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "100nF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "16V"; VariantName = "[No Variations]"
+Added Component: Designator=LED3(LED0402-RD_GREEN)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Color Temperature"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/XL-1005UGC/1051402.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Diode Configuration"; Value = "独立二极管"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "LED0402-RD_GREEN"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Forward Current"; Value = "25mA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Illumination Color"; Value = "翠绿色"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Lamp Holder Type"; Value = "1.0mmx0.5mm方形灯头"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "0402翠绿贴片式发光二极管"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Lens Color"; Value = "无色透明透镜"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Luminous Intensity"; Value = "249mcd"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "XINGLIGHT(成兴光)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "XL-1005UGC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "080bb9bd520f4b34ac21e218e7b036d6"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "LED0402_L1.0-W0.5-H0.2"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "40.1574,19.685,0,0,0,0,0,-0.0005,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mounting Style"; Value = "正贴"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Peak Wavelength"; Value = "531nm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "80mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C965793"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "XL-1005UGC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Viewing Angle"; Value = "120°"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Forward(Vf)"; Value = "3V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Wavelength - Dominant"; Value = "516nm~531nm"; VariantName = "[No Variations]"
+Added Component: Designator=LED4(LED0402-RD_GREEN)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Color Temperature"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/XL-1005UGC/1051402.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Diode Configuration"; Value = "独立二极管"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "LED0402-RD_GREEN"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Forward Current"; Value = "25mA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Illumination Color"; Value = "翠绿色"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Lamp Holder Type"; Value = "1.0mmx0.5mm方形灯头"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "0402翠绿贴片式发光二极管"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Lens Color"; Value = "无色透明透镜"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Luminous Intensity"; Value = "249mcd"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "XINGLIGHT(成兴光)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "XL-1005UGC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "080bb9bd520f4b34ac21e218e7b036d6"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "LED0402_L1.0-W0.5-H0.2"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "40.1574,19.685,0,0,0,0,0,-0.0005,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mounting Style"; Value = "正贴"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Peak Wavelength"; Value = "531nm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "80mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C965793"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "XL-1005UGC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Viewing Angle"; Value = "120°"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Forward(Vf)"; Value = "3V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Wavelength - Dominant"; Value = "516nm~531nm"; VariantName = "[No Variations]"
+Added Component: Designator=R13(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/0402WGF4702TCE/26535.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Basic Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "厚膜电阻 47kΩ ±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "UNI-ROYAL(厚声)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "0402WGF4702TCE"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C25792"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "0402WGF4702TCE"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "47kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R18(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/RC0402FR-074K7L/107086.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "厚膜电阻 4.7kΩ ±1% 62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "YAGEO(国巨)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "RC0402FR-074K7L"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C105871"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "RC0402FR-074K7L"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "4.7kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R19(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/RC0402FR-074K7L/107086.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "厚膜电阻 4.7kΩ ±1% 62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "YAGEO(国巨)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "RC0402FR-074K7L"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C105871"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "RC0402FR-074K7L"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "4.7kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R26(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402F1002TS/3180374.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "10kΩ ±1% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402F1002TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C2906861"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "FRC0402F1002TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "10kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R27(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402F1501TS/3279176.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1.5kΩ ±1% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402F1501TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C2933074"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "FRC0402F1501TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "1.5kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R29(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402J102%2520TS/3180412.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1kΩ ±5% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402J102 TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C2906899"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "FRC0402J102 TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±5%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "1kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=R30(R0402)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FRC0402F2001TS/3186279.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "R0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "2kΩ ±1% 62.5mW 厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "FOJAN(富捷)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "FRC0402F2001TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "98c88bc2b9094f218f3a3e30a7012738"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "R0402_L1.0-W0.5-H0.4"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "39.37,19.685,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-55℃~+155℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Power(Watts)"; Value = "62.5mW"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "0402"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C2909344"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "FRC0402F2001TS"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Temperature Coefficient"; Value = "±100ppm/℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Tolerance"; Value = "±1%"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "厚膜电阻"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "2kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage-Supply(Max)"; Value = "50V"; VariantName = "[No Variations]"
+Added Component: Designator=U7(CRYSTAL-SMD_L3.2-W1.5)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/FC31M2-32.768-NTLNNDTL/5705379.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Equivalent Series Resistance(ESR)"; Value = "70kΩ"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "CRYSTAL-SMD_L3.2-W1.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Frequency Stability"; Value = "±10ppm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "3215 2P 32.768kHz 12.5pF ±10ppm -40~+85℃(±10ppm)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Load Capacitance"; Value = "12.5pF"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "HCI(杭晶)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "FC31M2-32.768-NTLNNDTL"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "762d7afc596f4558a373612390f4386d"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "CRYSTAL-SMD_L3.2-W1.5-1"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "125.984,59.055,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Normal temperature Frequency Tolerance"; Value = "±10ppm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "SMD3215-2P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C5120559"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "FC31M2-32.768-NTLNNDTL"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type"; Value = "贴片晶振"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = "32.768kHz"; VariantName = "[No Variations]"
+Added Component: Designator=U8(TSSOP-8_L3.0-W3.0-P0.65-LS4.9-BL)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Alarm Output"; Value = "有"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "crystal oscillator"; Value = "外置"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current - Supply"; Value = "250nA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://www.nxp.com.cn/docs/zh/data-sheet/PCF8563.pdf"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Features"; Value = "看门狗定时器；倒数计时器；告警功能；可编程时钟输出"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "TSSOP-8_L3.0-W3.0-P0.65-LS4.9-BL"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Interface"; Value = "I2C"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "实时时钟/日历"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "NXP(恩智浦)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "PCF8563TS/5,118"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "6d0b9b814610470cb34a1acf75d8754c"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "TSSOP-8_L3.0-W3.0-H1.1-LS4.9-P0.65"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "118.11,192.913,0,0,0,0,0,-0.0005,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Quiescent Current(Iq)"; Value = "0.25uA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "TSSOP-8-3mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C27397"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "PCF8563TS/5,118"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Supply"; Value = "1.8V~5.5V"; VariantName = "[No Variations]"
+Added Component: Designator=U9(WSON-10_L2.0-W2.0-P0.40-BL-EP)
+Add component (AddParameter): Name = "0V Battery Charge"; Value = "支持"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Balance Current"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Battery Temperature Detection"; Value = "支持"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Charge Current - Max"; Value = "1A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Charging Saturation Voltage"; Value = "4.2V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://www.ti.com/cn/lit/ds/symlink/bq24040.pdf"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "End-Off Voltage"; Value = "800mV"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Features"; Value = "过流保护；恒压充电；恒流充电；自动再充电；充电终止；可编程充电电流；过压保护；欠压锁定；涓流充电；短路保护"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "WSON-10_L2.0-W2.0-P0.40-BL-EP"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Interface"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1A单输入单节锂离子和锂聚合物电池充电器"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "TI(德州仪器)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "BQ24040DSQR"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "0e1275d2e7d54e69a402a354e9203fe9"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "WSON-10_L2.0-W2.0-H0.8-P0.40"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "78.74,79.527,0,0,0,0,0,0,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Cells"; Value = "1"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "0℃~+125℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "WSON-10-EP(2x2)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C81080"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supply Current (Iq)"; Value = "1mA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "BQ24040DSQR"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "The Chip Type"; Value = "充电芯片"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Type of Battery"; Value = "锂电池"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage - Supply"; Value = "3.5V~28V"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=3V Pin=C8-1
+Added Pin To Net: NetName=3V Pin=C11-1
+Added Pin To Net: NetName=GND Pin=C23-1
+Added Pin To Net: NetName=GND Pin=C25-2
+Added Pin To Net: NetName=GND Pin=C26-1
+Added Pin To Net: NetName=5V Pin=C26-2
+Added Pin To Net: NetName=GND Pin=C27-1
+Added Pin To Net: NetName=3V Pin=C27-2
+Added Pin To Net: NetName=GND Pin=C28-1
+Added Pin To Net: NetName=3V Pin=C32-1
+Added Pin To Net: NetName=GND Pin=C32-2
+Added Pin To Net: NetName=3V Pin=CN1-1
+Added Pin To Net: NetName=3V Pin=R13-2
+Added Pin To Net: NetName=GND Pin=R17-1
+Added Pin To Net: NetName=3V Pin=R18-1
+Added Pin To Net: NetName=PB12 Pin=R18-2
+Added Pin To Net: NetName=3V Pin=R19-1
+Added Pin To Net: NetName=PB11 Pin=R19-2
+Added Pin To Net: NetName=GND Pin=R26-2
+Added Pin To Net: NetName=3V Pin=R27-2
+Added Pin To Net: NetName=GND Pin=R29-1
+Added Pin To Net: NetName=GND Pin=R30-1
+Added Pin To Net: NetName=3V Pin=U3-1
+Added Pin To Net: NetName=3V Pin=U3-3
+Added Pin To Net: NetName=GND Pin=U8-4
+Added Pin To Net: NetName=PB12 Pin=U8-5
+Added Pin To Net: NetName=PB11 Pin=U8-6
+Added Pin To Net: NetName=3V Pin=U8-8
+Added Pin To Net: NetName=5V Pin=U9-1
+Added Pin To Net: NetName=GND Pin=U9-3
+Added Pin To Net: NetName=3V Pin=U9-10
+Added Pin To Net: NetName=GND Pin=U9-11
+Added Pin To Net: NetName=PB11 Pin=U10-2
+Added Pin To Net: NetName=PB12 Pin=U10-4
+Added Pin To Net: NetName=GND Pin=U10-5
+Added Pin To Net: NetName=PB11 Pin=U11-2
+Added Pin To Net: NetName=PB12 Pin=U11-4
+Change Net Name : Old Net Name=NetR13_1 New Net Name=NetR14_1
+Change Net Name : Old Net Name=NetR18_1 New Net Name=NetR20_1
+Added Pin To Net: NetName=ADC Pin=U2-14
+Added Net: Name=ADC
+Added Pin To Net: NetName=NetC23_2 Pin=C23-2
+Added Pin To Net: NetName=NetC23_2 Pin=R13-1
+Added Pin To Net: NetName=NetC23_2 Pin=R17-2
+Added Net: Name=NetC23_2
+Added Pin To Net: NetName=NetC25_1 Pin=C25-1
+Added Pin To Net: NetName=NetC25_1 Pin=U7-2
+Added Pin To Net: NetName=NetC25_1 Pin=U8-1
+Added Net: Name=NetC25_1
+Added Pin To Net: NetName=NetC28_2 Pin=C28-2
+Added Pin To Net: NetName=NetC28_2 Pin=U7-1
+Added Pin To Net: NetName=NetC28_2 Pin=U8-2
+Added Net: Name=NetC28_2
+Added Pin To Net: NetName=NetLED3_1 Pin=LED3-1
+Added Pin To Net: NetName=NetLED3_1 Pin=U9-5
+Added Net: Name=NetLED3_1
+Added Pin To Net: NetName=NetLED3_2 Pin=LED3-2
+Added Pin To Net: NetName=NetLED3_2 Pin=R23-1
+Added Net: Name=NetLED3_2
+Added Pin To Net: NetName=NetLED4_1 Pin=LED4-1
+Added Pin To Net: NetName=NetLED4_1 Pin=U9-8
+Added Net: Name=NetLED4_1
+Added Pin To Net: NetName=NetLED4_2 Pin=LED4-2
+Added Pin To Net: NetName=NetLED4_2 Pin=R27-1
+Added Net: Name=NetLED4_2
+Added Pin To Net: NetName=NetR29_2 Pin=R29-2
+Added Pin To Net: NetName=NetR29_2 Pin=U9-2
+Added Net: Name=NetR29_2
+Added Pin To Net: NetName=NetR30_2 Pin=R30-2
+Added Pin To Net: NetName=NetR30_2 Pin=U9-4
+Added Net: Name=NetR30_2
+Added Member To Class: ClassName=Sheet1 Member=Component C25 cga0402c0g120j500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C28 cga0402c0g120j500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C29 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component C30 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C31 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component C32 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C32 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component LED3 xl-1005ugc_c965793
+Added Member To Class: ClassName=Sheet1 Member=Component LED4 xl-1005ugc_c965793
+Added Member To Class: ClassName=Sheet1 Member=Component R14 0402wgf4700tce
+Added Member To Class: ClassName=Sheet1 Member=Component R20 0402wgf4700tce
+Added Member To Class: ClassName=Sheet1 Member=Component R26 frc0402f1002ts
+Added Member To Class: ClassName=Sheet1 Member=Component R27 frc0402f1501ts
+Added Member To Class: ClassName=Sheet1 Member=Component R29 frc0402j102 ts
+Added Member To Class: ClassName=Sheet1 Member=Component R30 frc0402f2001ts
+Added Member To Class: ClassName=Sheet1 Member=Component U9 bq24040dsqr
+Added Member To Class: ClassName=Sheet1 Member=Component U10 lps22hbtr
+Added Member To Class: ClassName=Sheet1 Member=Component U11 lps22hbtr

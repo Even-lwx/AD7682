@@ -1,0 +1,21 @@
+Change Component Designator: OldDesignator=C?? NewDesignator=C24
+Change Component Designator: OldDesignator=C?? NewDesignator=C25
+Change Component Designator: OldDesignator=C?? NewDesignator=C26
+Change Component Designator: OldDesignator=C?? NewDesignator=C27
+Change Component Designator: OldDesignator=R14 NewDesignator=R15
+Change Component Designator: OldDesignator=R15 NewDesignator=R14
+Change Component Designator: OldDesignator=R19 NewDesignator=R20
+Change Component Designator: OldDesignator=R20 NewDesignator=R19
+Change Component Designator: OldDesignator=R?? NewDesignator=R21
+Change Component Designator: OldDesignator=R?? NewDesignator=R22
+Change Component Designator: OldDesignator=R?? NewDesignator=R23
+Change Component Designator: OldDesignator=R?? NewDesignator=R24
+Change Component Designator: OldDesignator=U?? NewDesignator=U7
+Change Component Designator: OldDesignator=U?? NewDesignator=U8
+Added Member To Class: ClassName=Sheet1 Member=Component C24 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component C26 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component C27 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component R21 rc0402fr-074k7l
+Added Member To Class: ClassName=Sheet1 Member=Component R22 rc0402fr-074k7l
+Added Member To Class: ClassName=Sheet1 Member=Component R23 rc0402fr-074k7l
+Added Member To Class: ClassName=Sheet1 Member=Component U8 lps22hbtr

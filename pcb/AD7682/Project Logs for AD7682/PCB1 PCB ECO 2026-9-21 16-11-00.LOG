@@ -1,0 +1,5 @@
+Removed Pin From Net: NetName=NetR6_2 Pin=U2-19
+Added Pin To Net: NetName=CS# Pin=R6-1
+Added Pin To Net: NetName=NetR6_2 Pin=R6-2
+Added Pin To Net: NetName=NetR6_2 Pin=U2-13
+Added Member To Class: ClassName=Sheet1 Member=Component R6 0201wmf470jtee

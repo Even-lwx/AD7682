@@ -1,0 +1,38 @@
+Added Component: Designator=CN1(CONN-SMD_2P-P2.54_XH2.54-2AB)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Color"; Value = "米色"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Contact Material"; Value = "磷铜"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Contact Plating"; Value = "锡"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current Rating"; Value = "500mA"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/2.54-2A-LT/766902.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "CONN-SMD_2P-P2.54_XH2.54-2AB"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "1x2P 间距:2.54mm 立贴 系列:XH"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "CAX(创都)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "2.54-2A-LT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "d8a33bf5c0154e0995c08ba39c3c8f35"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "CONN-SMD_XH2.54-LS-2P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "393.7,354.33,0,0,0,0,0,9.843,0"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mounting Type"; Value = "立贴"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Pins"; Value = "2P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of PINs Per Row"; Value = "2"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Rows"; Value = "1"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-25℃~+85℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Pins Structure"; Value = "1x2P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Pitch"; Value = "2.54mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Plastic Material"; Value = "LCP"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Reference Series"; Value = "XH"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Row Spacing"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "SMD,P=2.54mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C722695"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "2.54-2A-LT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating"; Value = "50V"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Y-Width of Bottom Edge on Board"; Value = "6mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Z-Height of the Board"; Value = "7.9mm"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=5V Pin=CN1-1
+Added Pin To Net: NetName=GND Pin=CN1-2
+Added Pin To Net: NetName=GND Pin=CN1-3
+Added Pin To Net: NetName=GND Pin=CN1-4
+Added Member To Class: ClassName=Sheet1 Member=Component CN1 2.54-2a-lt

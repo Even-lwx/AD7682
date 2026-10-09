@@ -1,0 +1,23 @@
+Removed Pin From Net: NetName=3V Pin=C8-1
+Removed Pin From Net: NetName=3V Pin=C11-1
+Removed Pin From Net: NetName=3V Pin=C27-2
+Removed Pin From Net: NetName=3V Pin=CN1-1
+Removed Pin From Net: NetName=3V Pin=R13-2
+Removed Pin From Net: NetName=3V Pin=R23-2
+Removed Pin From Net: NetName=3V Pin=R27-2
+Removed Pin From Net: NetName=3V Pin=U3-1
+Removed Pin From Net: NetName=3V Pin=U3-3
+Removed Pin From Net: NetName=3V Pin=U9-10
+Added Pin To Net: NetName=VBAT Pin=C8-1
+Added Pin To Net: NetName=VBAT Pin=C11-1
+Added Pin To Net: NetName=VBAT Pin=C27-2
+Added Pin To Net: NetName=VBAT Pin=CN1-1
+Added Pin To Net: NetName=VBAT Pin=R13-2
+Added Pin To Net: NetName=VBAT Pin=R23-2
+Added Pin To Net: NetName=VBAT Pin=R27-2
+Added Pin To Net: NetName=VBAT Pin=U3-1
+Added Pin To Net: NetName=VBAT Pin=U3-3
+Added Pin To Net: NetName=VBAT Pin=U9-10
+Added Net: Name=VBAT
+Added Member To Class: ClassName=Sheet1 Member=Component C32 cc0402krx7r7bb104
+Added Rule: Name=Schematic Supply Nets
