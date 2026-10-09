@@ -22,6 +22,14 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
+#include "i2c.h"
+#include "stdio.h"
+#include "string.h"
+#include "ad7682.h"
+#include "battery_adc.h"
+#include "sht41.h"
+#include "pcf8563.h"
+#include "w25q128.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -51,6 +59,8 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void Debug_Print(const char *text);
+static void Debug_RunTests(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -93,6 +103,7 @@ int main(void)
   MX_SPI2_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
+  Debug_Print("\r\nAD7682 board driver test start\r\n");
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -101,11 +112,61 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    Debug_RunTests();
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
+}
+
+static void Debug_Print(const char *text)
+{
+  HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), 100);
+}
+
+static void Debug_RunTests(void)
+{
+  char line[160];
+  uint16_t ad_code = 0;
+  uint32_t battery_code;
+  uint8_t jedec[3] = {0};
+  float temperature = 0.0f, humidity = 0.0f;
+  uint8_t voltage_low = 0;
+  PCF8563_DateTime rtc = {0};
+  AD7682_Handle ad = {0};
+  AD7682_Status ad_status;
+  HAL_StatusTypeDef status;
+
+  AD7682_Init(&ad, &hspi1, 3.3f); /* Used only for handle setup; raw code is printed. */
+  ad_status = AD7682_ReadRaw(&ad, &ad_code, 10);
+  (void)snprintf(line, sizeof(line), "AD7682 raw: status=%d code=%u\r\n",
+                 (int)ad_status, (unsigned)ad_code);
+  Debug_Print(line);
+
+  battery_code = BatteryAdc_ReadRaw(&hadc1, 10);
+  (void)snprintf(line, sizeof(line), "Battery ADC raw: %lu\r\n",
+                 (unsigned long)battery_code);
+  Debug_Print(line);
+
+  status = SHT41_Read(&hi2c1, &temperature, &humidity, 100);
+  (void)snprintf(line, sizeof(line), "SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",
+                 (int)status, (double)temperature, (double)humidity);
+  Debug_Print(line);
+
+  (void)PCF8563_GetVoltageLow(&hi2c1, &voltage_low, 100);
+  status = PCF8563_ReadDateTime(&hi2c1, &rtc, 100);
+  (void)snprintf(line, sizeof(line),
+                 "PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",
+                 (int)status, (unsigned)rtc.year, (unsigned)rtc.month,
+                 (unsigned)rtc.day, (unsigned)rtc.hours, (unsigned)rtc.minutes,
+                 (unsigned)rtc.seconds, (unsigned)voltage_low);
+  Debug_Print(line);
+  status = W25Q128_ReadJedec(&hspi2, jedec, 100);
+  (void)snprintf(line, sizeof(line), "W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",
+                 (int)status, jedec[0], jedec[1], jedec[2]);
+  Debug_Print(line);
 }
 
 /**
