@@ -141,6 +141,7 @@ static void Debug_RunTests(void)
   char line[160];
   uint16_t ad_code = 0;
   uint32_t battery_code;
+  float battery_voltage;
   uint8_t jedec[3] = {0};
   float temperature = 0.0f, humidity = 0.0f;
   uint8_t voltage_low = 0;
@@ -156,8 +157,9 @@ static void Debug_RunTests(void)
   Debug_Print(line);
 
   battery_code = BatteryAdc_ReadRaw(&hadc1, 10);
-  (void)snprintf(line, sizeof(line), "Battery ADC raw: %lu\r\n",
-                 (unsigned long)battery_code);
+  battery_voltage = BatteryAdc_CalibratedVoltage(battery_code);
+  (void)snprintf(line, sizeof(line), "Battery ADC raw: %lu voltage: %.3f V\r\n",
+                 (unsigned long)battery_code, (double)battery_voltage);
   Debug_Print(line);
 
   status = SHT41_Read(&hi2c1, &temperature, &humidity, 100);
