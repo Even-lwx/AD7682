@@ -332,7 +332,7 @@
               <MiscControls />
               <Define>USE_HAL_DRIVER,STM32G031xx</Define>
               <Undefine />
-              <IncludePath>../Core/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G0xx/Include;../Drivers/CMSIS/Include;../code/ad7682;../code/battery;../code/sht41;../code/w25q128</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G0xx/Include;../Drivers/CMSIS/Include;../code/ad7682;../code/battery;../code/sht41;../code/w25q128;../code/pcf8563</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -435,6 +435,7 @@
             <File><FileName>battery_adc.c</FileName><FileType>1</FileType><FilePath>../code/battery/battery_adc.c</FilePath></File>
             <File><FileName>sht41.c</FileName><FileType>1</FileType><FilePath>../code/sht41/sht41.c</FilePath></File>
             <File><FileName>w25q128.c</FileName><FileType>1</FileType><FilePath>../code/w25q128/w25q128.c</FilePath></File>
+            <File><FileName>pcf8563.c</FileName><FileType>1</FileType><FilePath>../code/pcf8563/pcf8563.c</FilePath></File>
           </Files>
         </Group>
         <Group>
