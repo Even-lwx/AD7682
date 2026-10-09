@@ -61,6 +61,7 @@
 void SystemClock_Config(void);
 static void Debug_Print(const char *text);
 static void Debug_RunTests(void);
+static void Debug_FlashReadWriteTest(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -115,6 +116,8 @@ int main(void)
     Debug_Print(clock_line);
   }
   /* USER CODE BEGIN 2 */
+  /* Run once per boot, not every second, to limit flash erase wear. */
+  Debug_FlashReadWriteTest();
 
   /* USER CODE END 2 */
 
@@ -134,6 +137,88 @@ int main(void)
 static void Debug_Print(const char *text)
 {
   HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), 100);
+}
+
+/* W25Q128JV: 16 MiB, 4 KiB sectors, 256-byte pages.
+   Commands 03h/06h/02h/20h/05h: read/WREN/program/erase/BUSY polling.
+   Uses SPI2 (PA0 SCK, PA4 DI, PB2 DO) and PA2 CS#.
+   Only use the final sector if every byte is initially FF. */
+static void Debug_FlashReadWriteTest(void)
+{
+  const uint32_t address = 0x00FFF000UL;
+  uint8_t tx[256], rx[256], id[3];
+  uint32_t offset, i;
+  HAL_StatusTypeDef status;
+  char line[128];
+
+  Debug_Print("Flash RW test: sector=0xFFF000, once per boot\r\n");
+  status = W25Q128_ReadJedec(&hspi2, id, 100);
+  if (status != HAL_OK || id[0] != 0xEF || id[1] != 0x40 || id[2] != 0x18)
+  {
+    Debug_Print("Flash RW test: SKIP (JEDEC mismatch or SPI error)\r\n");
+    return;
+  }
+  for (offset = 0; offset < 4096; offset += sizeof(rx))
+  {
+    status = W25Q128_Read(&hspi2, address + offset, rx, sizeof(rx), 100);
+    if (status != HAL_OK)
+    {
+      Debug_Print("Flash RW test: FAIL (initial read)\r\n");
+      return;
+    }
+    for (i = 0; i < sizeof(rx); ++i)
+    {
+      if (rx[i] != 0xFF)
+      {
+        Debug_Print("Flash RW test: SKIP (sector contains data; preserved)\r\n");
+        return;
+      }
+    }
+  }
+  status = W25Q128_EraseSector(&hspi2, address, 3000);
+  (void)snprintf(line, sizeof(line), "Flash erase: status=%d\r\n", (int)status);
+  Debug_Print(line);
+  if (status != HAL_OK) return;
+
+  /* Write every possible byte value in a permuted order, one full page. */
+  for (i = 0; i < sizeof(tx); ++i) tx[i] = (uint8_t)(i ^ 0xA5U);
+  status = W25Q128_Write(&hspi2, address, tx, sizeof(tx), 100);
+  (void)snprintf(line, sizeof(line), "Flash write 256 bytes: status=%d\r\n", (int)status);
+  Debug_Print(line);
+  if (status == HAL_OK)
+  {
+    status = W25Q128_Read(&hspi2, address, rx, sizeof(rx), 100);
+    (void)snprintf(line, sizeof(line), "Flash read: status=%d\r\n", (int)status);
+    Debug_Print(line);
+    if (status == HAL_OK)
+    {
+      for (i = 0; i < sizeof(tx); ++i) if (tx[i] != rx[i]) break;
+      if (i == sizeof(tx)) Debug_Print("Flash compare: PASS (256/256 bytes)\r\n");
+      else
+      {
+        (void)snprintf(line, sizeof(line),
+                       "Flash compare: FAIL offset=%lu expected=%02X actual=%02X\r\n",
+                       (unsigned long)i, tx[i], rx[i]);
+        Debug_Print(line);
+      }
+    }
+  }
+  /* Restore this originally blank sector, then verify the entire erase. */
+  status = W25Q128_EraseSector(&hspi2, address, 3000);
+  if (status != HAL_OK)
+  {
+    Debug_Print("Flash cleanup: FAIL (test data may remain at 0xFFF000)\r\n");
+    return;
+  }
+  for (offset = 0; offset < 4096; offset += sizeof(rx))
+  {
+    status = W25Q128_Read(&hspi2, address + offset, rx, sizeof(rx), 100);
+    if (status != HAL_OK) break;
+    for (i = 0; i < sizeof(rx); ++i) if (rx[i] != 0xFF) break;
+    if (i != sizeof(rx)) break;
+  }
+  Debug_Print(offset == 4096 ? "Flash cleanup: PASS (4096 bytes FF)\r\n" :
+                              "Flash cleanup: FAIL (erase verification)\r\n");
 }
 
 static void Debug_RunTests(void)
