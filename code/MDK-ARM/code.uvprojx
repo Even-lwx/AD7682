@@ -412,6 +412,11 @@
               <FilePath>../Core/Src/usart.c</FilePath>
             </File>
             <File>
+              <FileName>i2c.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/i2c.c</FilePath>
+            </File>
+            <File>
               <FileName>stm32g0xx_it.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32g0xx_it.c</FilePath>
@@ -421,6 +426,15 @@
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32g0xx_hal_msp.c</FilePath>
             </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Application/User/Drivers</GroupName>
+          <Files>
+            <File><FileName>ad7682.c</FileName><FileType>1</FileType><FilePath>../code/ad7682/ad7682.c</FilePath></File>
+            <File><FileName>battery_adc.c</FileName><FileType>1</FileType><FilePath>../code/battery/battery_adc.c</FilePath></File>
+            <File><FileName>sht41.c</FileName><FileType>1</FileType><FilePath>../code/sht41/sht41.c</FilePath></File>
+            <File><FileName>w25q128.c</FileName><FileType>1</FileType><FilePath>../code/w25q128/w25q128.c</FilePath></File>
           </Files>
         </Group>
         <Group>
