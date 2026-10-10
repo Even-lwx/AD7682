@@ -187,7 +187,7 @@ void SystemClock_Config(void)
 
 static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
 
-/* PA15/LED2 电量指示：高电平点亮，低电平熄灭。 */
+/* PA15/LED2 电量指示：低电平点亮，高电平熄灭。 */
 static void BatteryLed_Update(float voltage)
 {
   static uint32_t last_toggle_tick;
@@ -196,7 +196,7 @@ static void BatteryLed_Update(float voltage)
 
   if (voltage >= 4.0f)
   {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
     blink_state = 0U;
     last_toggle_tick = now;
   }
@@ -207,12 +207,12 @@ static void BatteryLed_Update(float voltage)
       last_toggle_tick = now;
       blink_state = (uint8_t)!blink_state;
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15,
-                        blink_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                        blink_state ? GPIO_PIN_RESET : GPIO_PIN_SET);
     }
   }
   else
   {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
     blink_state = 0U;
     last_toggle_tick = now;
   }
