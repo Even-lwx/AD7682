@@ -1,8 +1,137 @@
 #include "w25q128.h"
-static void cs(GPIO_PinState s){HAL_GPIO_WritePin(W25Q128_CS_PORT,W25Q128_CS_PIN,s);}
-static HAL_StatusTypeDef cmd(SPI_HandleTypeDef*h,uint8_t c,uint32_t t){cs(GPIO_PIN_RESET);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,&c,1,t);cs(GPIO_PIN_SET);return s;}
-static HAL_StatusTypeDef wait(SPI_HandleTypeDef*h,uint32_t t){uint8_t c=0x05,sr;uint32_t st=HAL_GetTick();do{cs(0);if(HAL_SPI_Transmit(h,&c,1,t)!=HAL_OK){cs(1);return HAL_ERROR;}if(HAL_SPI_Receive(h,&sr,1,t)!=HAL_OK){cs(1);return HAL_ERROR;}cs(1);}while((sr&1U)&&((HAL_GetTick()-st)<t));return(sr&1U)?HAL_TIMEOUT:HAL_OK;}
-HAL_StatusTypeDef W25Q128_ReadJedec(SPI_HandleTypeDef*h,uint8_t id[3],uint32_t t){uint8_t c=0x9F;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,&c,1,t);if(s==HAL_OK)s=HAL_SPI_Receive(h,id,3,t);cs(1);return s;}
-HAL_StatusTypeDef W25Q128_Read(SPI_HandleTypeDef*h,uint32_t a,uint8_t*b,uint32_t n,uint32_t t){uint8_t c[4]={3,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);if(s==HAL_OK)s=HAL_SPI_Receive(h,b,n,t);cs(1);return s;}
-HAL_StatusTypeDef W25Q128_Write(SPI_HandleTypeDef*h,uint32_t a,const uint8_t*b,uint32_t n,uint32_t t){uint8_t c[4]={2,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};if(n>256)return HAL_ERROR;uint8_t w=6;if(cmd(h,w,t)!=HAL_OK)return HAL_ERROR;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);if(s==HAL_OK)s=HAL_SPI_Transmit(h,(uint8_t*)b,n,t);cs(1);if(s!=HAL_OK)return s;return wait(h,t);}
-HAL_StatusTypeDef W25Q128_EraseSector(SPI_HandleTypeDef*h,uint32_t a,uint32_t t){uint8_t c[4]={0x20,(uint8_t)(a>>16),(uint8_t)(a>>8),(uint8_t)a};if(cmd(h,6,t)!=HAL_OK)return HAL_ERROR;cs(0);HAL_StatusTypeDef s=HAL_SPI_Transmit(h,c,4,t);cs(1);if(s!=HAL_OK)return s;return wait(h,t);}
+
+static void W25Q128_SetCs(GPIO_PinState state)
+{
+    HAL_GPIO_WritePin(W25Q128_CS_PORT, W25Q128_CS_PIN, state);
+}
+
+static HAL_StatusTypeDef W25Q128_SendCommand(SPI_HandleTypeDef *spi,
+                                             uint8_t command, uint32_t timeout)
+{
+    HAL_StatusTypeDef status;
+
+    W25Q128_SetCs(GPIO_PIN_RESET);
+    status = HAL_SPI_Transmit(spi, &command, 1U, timeout);
+    W25Q128_SetCs(GPIO_PIN_SET);
+    return status;
+}
+
+static HAL_StatusTypeDef W25Q128_WaitReady(SPI_HandleTypeDef *spi,
+                                           uint32_t timeout)
+{
+    uint8_t command = 0x05U;
+    uint8_t status_register = 0U;
+    uint32_t start = HAL_GetTick();
+
+    do
+    {
+        W25Q128_SetCs(GPIO_PIN_RESET);
+        if (HAL_SPI_Transmit(spi, &command, 1U, timeout) != HAL_OK)
+        {
+            W25Q128_SetCs(GPIO_PIN_SET);
+            return HAL_ERROR;
+        }
+        if (HAL_SPI_Receive(spi, &status_register, 1U, timeout) != HAL_OK)
+        {
+            W25Q128_SetCs(GPIO_PIN_SET);
+            return HAL_ERROR;
+        }
+        W25Q128_SetCs(GPIO_PIN_SET);
+    } while (((status_register & 0x01U) != 0U) &&
+             ((HAL_GetTick() - start) < timeout));
+
+    return ((status_register & 0x01U) != 0U) ? HAL_TIMEOUT : HAL_OK;
+}
+
+HAL_StatusTypeDef W25Q128_ReadJedec(SPI_HandleTypeDef *spi, uint8_t id[3],
+                                    uint32_t timeout)
+{
+    uint8_t command = 0x9FU;
+    HAL_StatusTypeDef status;
+
+    W25Q128_SetCs(GPIO_PIN_RESET);
+    status = HAL_SPI_Transmit(spi, &command, 1U, timeout);
+    if (status == HAL_OK)
+    {
+        status = HAL_SPI_Receive(spi, id, 3U, timeout);
+    }
+    W25Q128_SetCs(GPIO_PIN_SET);
+    return status;
+}
+
+HAL_StatusTypeDef W25Q128_Read(SPI_HandleTypeDef *spi, uint32_t address,
+                               uint8_t *buffer, uint32_t length,
+                               uint32_t timeout)
+{
+    uint8_t command[4] = {
+        0x03U, (uint8_t)(address >> 16U), (uint8_t)(address >> 8U),
+        (uint8_t)address
+    };
+    HAL_StatusTypeDef status;
+
+    W25Q128_SetCs(GPIO_PIN_RESET);
+    status = HAL_SPI_Transmit(spi, command, 4U, timeout);
+    if (status == HAL_OK)
+    {
+        status = HAL_SPI_Receive(spi, buffer, length, timeout);
+    }
+    W25Q128_SetCs(GPIO_PIN_SET);
+    return status;
+}
+
+HAL_StatusTypeDef W25Q128_Write(SPI_HandleTypeDef *spi, uint32_t address,
+                                const uint8_t *buffer, uint32_t length,
+                                uint32_t timeout)
+{
+    uint8_t command[4] = {
+        0x02U, (uint8_t)(address >> 16U), (uint8_t)(address >> 8U),
+        (uint8_t)address
+    };
+    uint8_t write_enable = 0x06U;
+    HAL_StatusTypeDef status;
+
+    if (length > 256U)
+    {
+        return HAL_ERROR;
+    }
+    if (W25Q128_SendCommand(spi, write_enable, timeout) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+    W25Q128_SetCs(GPIO_PIN_RESET);
+    status = HAL_SPI_Transmit(spi, command, 4U, timeout);
+    if (status == HAL_OK)
+    {
+        status = HAL_SPI_Transmit(spi, (uint8_t *)buffer, length, timeout);
+    }
+    W25Q128_SetCs(GPIO_PIN_SET);
+    if (status != HAL_OK)
+    {
+        return status;
+    }
+    return W25Q128_WaitReady(spi, timeout);
+}
+
+HAL_StatusTypeDef W25Q128_EraseSector(SPI_HandleTypeDef *spi, uint32_t address,
+                                      uint32_t timeout)
+{
+    uint8_t command[4] = {
+        0x20U, (uint8_t)(address >> 16U), (uint8_t)(address >> 8U),
+        (uint8_t)address
+    };
+    uint8_t write_enable = 0x06U;
+    HAL_StatusTypeDef status;
+
+    if (W25Q128_SendCommand(spi, write_enable, timeout) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+    W25Q128_SetCs(GPIO_PIN_RESET);
+    status = HAL_SPI_Transmit(spi, command, 4U, timeout);
+    W25Q128_SetCs(GPIO_PIN_SET);
+    if (status != HAL_OK)
+    {
+        return status;
+    }
+    return W25Q128_WaitReady(spi, timeout);
+}
