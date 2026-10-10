@@ -1,5 +1,6 @@
 #include "i2c.h"
-SoftI2C_HandleTypeDef hi2c1={GPIOB,GPIO_PIN_12,GPIOB,GPIO_PIN_11};
+/* Board wiring: PB11=SCL, PB12=SDA. Both lines are open-drain. */
+SoftI2C_HandleTypeDef hi2c1={GPIOB,GPIO_PIN_11,GPIOB,GPIO_PIN_12};
 static void d(void){for(volatile uint32_t i=0;i<32;i++)__NOP();}
 static void w(SoftI2C_HandleTypeDef*h,GPIO_TypeDef*p,uint16_t n,GPIO_PinState s){HAL_GPIO_WritePin(p,n,s);d();}
 static GPIO_PinState r(SoftI2C_HandleTypeDef*h){return HAL_GPIO_ReadPin(h->sda_port,h->sda_pin);}

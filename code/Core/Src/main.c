@@ -22,6 +22,14 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
+#include "i2c.h"
+#include "ad7682.h"
+#include "battery_adc.h"
+#include "sht41.h"
+#include "pcf8563.h"
+#include "w25q128.h"
+#include <stdio.h>
+#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -95,6 +103,7 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   /* Run once per boot, not every second, to limit flash erase wear. */
   Debug_FlashReadWriteTest();
