@@ -19,11 +19,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usart.h"
 #include "stm32g0xx_it.h"
-extern UART_HandleTypeDef huart1;
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +58,7 @@ extern UART_HandleTypeDef huart1;
 /* External variables --------------------------------------------------------*/
 
 /* USER CODE BEGIN EV */
+extern UART_HandleTypeDef huart1;
 
 /* USER CODE END EV */
 
@@ -142,10 +142,12 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32g0xx.s).                    */
 /******************************************************************************/
 
+/* USER CODE BEGIN USART1_IRQn 0 */
 void USART1_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart1);
 }
+/* USER CODE END USART1_IRQn 0 */
 
 /* USER CODE BEGIN 1 */
 
