@@ -1,5 +1,7 @@
 #include "ad7682.h"
 
+/* AD7682 驱动：通过 CNV 启动转换，再使用 SPI 读取 16 位 MSB 数据。 */
+
 /* AD7682 datasheet: CNV high starts acquisition/conversion; after tCONV,
  * 16 SCK falling edges shift out MSB-first conversion data. */
 static void AD7682_DelayUs(uint32_t us)
@@ -18,6 +20,7 @@ static void AD7682_DelayUs(uint32_t us)
 AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
                           float vref_volts)
 {
+    /* 保存 SPI、CNV 和参考电压参数，后续读取函数复用该配置。 */
     if ((dev == NULL) || (hspi == NULL) || (vref_volts <= 0.0f))
     {
         return AD7682_ERROR;
@@ -34,6 +37,7 @@ AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
 AD7682_Status AD7682_ReadRaw(AD7682_Handle *dev, uint16_t *code,
                              uint32_t timeout_ms)
 {
+    /* CNV 高脉冲启动一次转换，等待转换完成后读取两个字节。 */
     uint8_t rx[2] = {0U, 0U};
     HAL_StatusTypeDef hal_status;
 
@@ -62,6 +66,7 @@ AD7682_Status AD7682_ReadRaw(AD7682_Handle *dev, uint16_t *code,
 AD7682_Status AD7682_ReadVoltage(AD7682_Handle *dev, float *voltage,
                                  uint32_t timeout_ms)
 {
+    /* 原始码按 16 位满量程和外部参考电压换算。 */
     uint16_t code;
     AD7682_Status status;
 

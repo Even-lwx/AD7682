@@ -1,10 +1,13 @@
 #include "i2c.h"
 
+/* 软件 I2C 时序实现：GPIO 释放为高电平，外部上拉完成总线回升。 */
+
 /* 软件 I2C：PB11 为 SCL，PB12 为 SDA，外部上拉到 3.3 V。 */
 SoftI2C_HandleTypeDef hi2c1 = {GPIOB, GPIO_PIN_11, GPIOB, GPIO_PIN_12};
 
 static void SoftI2C_Delay(void)
 {
+    /* 简单延时用于限制 GPIO 翻转速度，不作为精密时基。 */
     for (volatile uint32_t i = 0U; i < 32U; ++i) { __NOP(); }
 }
 
@@ -21,6 +24,7 @@ static GPIO_PinState SoftI2C_ReadSda(const SoftI2C_HandleTypeDef *handle)
 
 static void SoftI2C_Start(SoftI2C_HandleTypeDef *handle)
 {
+    /* SDA 在 SCL 为高时由高变低，产生 I2C START。 */
     SoftI2C_WritePin(handle->sda_port, handle->sda_pin, GPIO_PIN_SET);
     SoftI2C_WritePin(handle->scl_port, handle->scl_pin, GPIO_PIN_SET);
     SoftI2C_WritePin(handle->sda_port, handle->sda_pin, GPIO_PIN_RESET);
@@ -29,6 +33,7 @@ static void SoftI2C_Start(SoftI2C_HandleTypeDef *handle)
 
 static void SoftI2C_Stop(SoftI2C_HandleTypeDef *handle)
 {
+    /* SDA 在 SCL 为高时由低变高，产生 I2C STOP。 */
     SoftI2C_WritePin(handle->sda_port, handle->sda_pin, GPIO_PIN_RESET);
     SoftI2C_WritePin(handle->scl_port, handle->scl_pin, GPIO_PIN_SET);
     SoftI2C_WritePin(handle->sda_port, handle->sda_pin, GPIO_PIN_SET);
@@ -36,6 +41,7 @@ static void SoftI2C_Stop(SoftI2C_HandleTypeDef *handle)
 
 static uint8_t SoftI2C_WriteByte(SoftI2C_HandleTypeDef *handle, uint8_t data)
 {
+    /* 高位先发送，并在第 9 个时钟采样从机 ACK。 */
     uint8_t i;
     uint8_t ack;
     for (i = 0U; i < 8U; ++i)
@@ -55,6 +61,7 @@ static uint8_t SoftI2C_WriteByte(SoftI2C_HandleTypeDef *handle, uint8_t data)
 
 static uint8_t SoftI2C_ReadByte(SoftI2C_HandleTypeDef *handle, uint8_t ack)
 {
+    /* 高位先接收，ack 参数决定本字节后发送 ACK 或 NACK。 */
     uint8_t i;
     uint8_t data = 0U;
     SoftI2C_WritePin(handle->sda_port, handle->sda_pin, GPIO_PIN_SET);
@@ -75,6 +82,7 @@ static uint8_t SoftI2C_ReadByte(SoftI2C_HandleTypeDef *handle, uint8_t ack)
 
 void MX_I2C1_Init(void)
 {
+    /* 软件 I2C 两根线均配置为开漏输出并释放为高电平。 */
     GPIO_InitTypeDef gpio = {0};
     __HAL_RCC_GPIOB_CLK_ENABLE();
     gpio.Pin = GPIO_PIN_11 | GPIO_PIN_12;

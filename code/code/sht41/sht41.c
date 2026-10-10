@@ -1,8 +1,11 @@
 #include "sht41.h"
 
+/* SHT41 驱动：发送高精度测量命令，读取温湿度并校验两组 CRC。 */
+
 /* SHT41 的 CRC-8 多项式为 0x31，初值为 0xFF。 */
 static uint8_t SHT41_Crc8(const uint8_t *data, uint8_t length)
 {
+    /* 按 Sensirion 规定的 CRC-8 多项式计算数据校验值。 */
     uint8_t crc = 0xFFU;
     uint8_t bit;
 
@@ -20,6 +23,7 @@ static uint8_t SHT41_Crc8(const uint8_t *data, uint8_t length)
 
 HAL_StatusTypeDef SHT41_Reset(SoftI2C_HandleTypeDef *handle, uint32_t timeout)
 {
+    /* 0x94 为 SHT41 软复位命令。 */
     uint8_t command = 0x94U;
     return SoftI2C_MasterTransmit(handle, SHT41_ADDR, &command, 1U, timeout);
 }
@@ -28,6 +32,7 @@ HAL_StatusTypeDef SHT41_Read(SoftI2C_HandleTypeDef *handle,
                              float *temperature_c, float *humidity_rh,
                              uint32_t timeout)
 {
+    /* 0xFD 为高精度无加热测量命令，测量完成后读取 6 字节结果。 */
     uint8_t command = 0xFDU;
     uint8_t data[6];
     uint16_t raw_temperature;
