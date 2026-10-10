@@ -71,6 +71,7 @@ static void Debug_RunTests(void);
 static void Debug_FlashReadWriteTest(void);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
+static void BatteryLed_Update(float voltage);
 
 /* USER CODE END PFP */
 
@@ -186,6 +187,37 @@ void SystemClock_Config(void)
 
 static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
 
+/* PA15/LED2 电量指示：高电平点亮，低电平熄灭。 */
+static void BatteryLed_Update(float voltage)
+{
+  static uint32_t last_toggle_tick;
+  static uint8_t blink_state;
+  uint32_t now = HAL_GetTick();
+
+  if (voltage >= 4.0f)
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
+    blink_state = 0U;
+    last_toggle_tick = now;
+  }
+  else if (voltage >= 3.7f)
+  {
+    if ((now - last_toggle_tick) >= 500U)
+    {
+      last_toggle_tick = now;
+      blink_state = (uint8_t)!blink_state;
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15,
+                        blink_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    }
+  }
+  else
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+    blink_state = 0U;
+    last_toggle_tick = now;
+  }
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
@@ -261,7 +293,7 @@ static void Serial_ProcessCommand(void)
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
 
 static void Debug_FlashReadWriteTest(void){uint8_t tx[16],rx[16],id[3];uint32_t i;HAL_StatusTypeDef s;char l[96];s=W25Q128_ReadJedec(&hspi2,id,100);if(s!=HAL_OK||id[0]!=0xEF||id[1]!=0x40||id[2]!=0x18){Debug_Print("Flash test: SKIP\r\n");return;}s=W25Q128_EraseSector(&hspi2,0xFFF000,3000);if(s!=HAL_OK){Debug_Print("Flash erase: FAIL\r\n");return;}for(i=0;i<sizeof(tx);i++)tx[i]=(uint8_t)(i^0xA5);s=W25Q128_Write(&hspi2,0xFFF000,tx,sizeof(tx),100);if(s==HAL_OK)s=W25Q128_Read(&hspi2,0xFFF000,rx,sizeof(rx),100);for(i=0;i<sizeof(tx)&&s==HAL_OK;i++)if(tx[i]!=rx[i])break;(void)snprintf(l,sizeof(l),"Flash RW test: %s\r\n",(s==HAL_OK&&i==sizeof(tx))?"PASS":"FAIL");Debug_Print(l);(void)W25Q128_EraseSector(&hspi2,0xFFF000,3000);}
-static void Debug_RunTests(void){char l[160];uint32_t b;float bv,t=0,r=0;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};HAL_StatusTypeDef s;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
+static void Debug_RunTests(void){char l[160];uint32_t b;float bv,t=0,r=0;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};HAL_StatusTypeDef s;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);BatteryLed_Update(bv);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
 
 /* USER CODE END 4 */
 
