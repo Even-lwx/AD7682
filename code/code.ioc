@@ -59,6 +59,7 @@ NVIC.NonMaskableInt_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.PendSV_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.SVC_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:true
 NVIC.SysTick_IRQn=true\:3\:0\:false\:false\:true\:false\:true\:false
+NVIC.USART1_IRQn=true\:1\:0\:false\:false\:true\:true\:false
 PA0.Mode=Full_Duplex_Master
 PA0.Signal=SPI2_SCK
 PA1.Mode=Full_Duplex_Master
