@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32G031xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G0xx/Include;../Drivers/CMSIS/Include;../code/ad7682;../code/battery;../code/sht41;../code/w25q128;../code/pcf8563;../code/lps22hh</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc;../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G0xx/Include;../Drivers/CMSIS/Include;../code/ad7682;../code/battery;../code/sht41;../code/w25q128;../code/pcf8563;../code/lps22hh;../code/data_logger</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -467,6 +467,11 @@
               <FileName>lps22hh.c</FileName>
               <FileType>1</FileType>
               <FilePath>../code/lps22hh/lps22hh.c</FilePath>
+            </File>
+            <File>
+              <FileName>data_logger.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../code/data_logger/data_logger.c</FilePath>
             </File>
           </Files>
         </Group>

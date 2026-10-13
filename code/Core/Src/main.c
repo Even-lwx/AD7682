@@ -32,6 +32,7 @@
 #include "pcf8563.h"
 #include "w25q128.h"
 #include "lps22hh.h"
+#include "data_logger.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -74,6 +75,8 @@ void SystemClock_Config(void);
 static void Debug_Print(const char *text);
 static void Debug_BootInitializeDevices(void);
 static void Debug_SendSamples(void);
+static void SimulatedAdc_Read(uint16_t adc[4]);
+static void Serial_DumpLogs(void);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
@@ -121,6 +124,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
   Debug_BootInitializeDevices();
+  (void)DataLogger_Init(&hspi2, BOOT_INIT_TIMEOUT);
 
   /* USER CODE END 2 */
 
@@ -368,6 +372,9 @@ static void Serial_ProcessCommand(void)
   g_uart_line_overflow=0U;
   if(overflow){Debug_Print("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
+  if(Serial_Equals(trimmed,"log dump")){Serial_DumpLogs();return;}
+  if(Serial_Equals(trimmed,"log info")){char line[96];(void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu\r\n",(unsigned long)DataLogger_Count(),(unsigned long)DataLogger_Capacity());Debug_Print(line);return;}
+  if(Serial_Equals(trimmed,"log clear")){Debug_Print(DataLogger_Clear(3000U)==HAL_OK?"LOG CLEAR OK\r\n":"LOG CLEAR ERROR\r\n");return;}
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
   if(Serial_Equals(trimmed,"exit")){if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode){if(strlen(trimmed)>=3U&&(Serial_ToLower(trimmed[0])=='s')&&(Serial_ToLower(trimmed[1])=='e')&&(Serial_ToLower(trimmed[2])=='t'))Serial_HandleSetTime(trimmed);else Debug_Print("Unknown setting command\r\n");}
@@ -375,11 +382,51 @@ static void Serial_ProcessCommand(void)
 
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
 
-/* FireWater 数据行：ch0 电池电压，ch1 SHT41 温度，ch2 SHT41 湿度，
- * ch3 U7 气压，ch4 U7 温度，ch5 U11 气压，ch6 U11 温度。 */
+static void Serial_DumpLogs(void)
+{
+  uint32_t i;
+  uint32_t count = DataLogger_Count();
+  uint16_t year;
+  char line[180];
+  DataLogger_Sample sample;
+
+  for (i = 0U; i < count; i++)
+  {
+    if (DataLogger_Read(i, &sample, 100U) != HAL_OK)
+    {
+      continue;
+    }
+    year = (uint16_t)(sample.datetime.year +
+                      ((sample.datetime.century != 0U) ? 1900U : 2000U));
+    (void)snprintf(line, sizeof(line),
+                   "samples: %u,%02u,%02u,%02u,%02u,%02u,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
+                   (unsigned)year, (unsigned)sample.datetime.month,
+                   (unsigned)sample.datetime.day, (unsigned)sample.datetime.hours,
+                   (unsigned)sample.datetime.minutes, (unsigned)sample.datetime.seconds,
+                   (double)sample.temperature_c, (double)sample.humidity_rh,
+                   (double)sample.pressure_u7_hpa, (double)sample.pressure_u11_hpa,
+                   (unsigned)sample.adc[0], (unsigned)sample.adc[1],
+                   (unsigned)sample.adc[2], (unsigned)sample.adc[3]);
+    Debug_Print(line);
+  }
+}
+
+static void SimulatedAdc_Read(uint16_t adc[4])
+{
+  adc[0] = 1000U;
+  adc[1] = 2000U;
+  adc[2] = 3000U;
+  adc[3] = 4000U;
+}
+
+/* FireWater 数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
+ * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 模拟 ADC。 */
 static void Debug_SendSamples(void)
 {
+  static uint32_t last_log_tick;
   uint32_t battery_raw;
+  uint32_t now;
+  uint16_t adc[4];
   float battery_voltage;
   float sht_temperature = 0.0f;
   float sht_humidity = 0.0f;
@@ -388,6 +435,7 @@ static void Debug_SendSamples(void)
   float u11_pressure = 0.0f;
   float u11_temperature = 0.0f;
   char line[128];
+  DataLogger_Sample log_sample;
 
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
@@ -409,12 +457,32 @@ static void Debug_SendSamples(void)
     u11_pressure = 0.0f;
     u11_temperature = 0.0f;
   }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+  SimulatedAdc_Read(adc);
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
                  (double)u7_temperature, (double)u11_pressure,
-                 (double)u11_temperature);
+                 (double)u11_temperature, (unsigned)adc[0],
+                 (unsigned)adc[1], (unsigned)adc[2], (unsigned)adc[3]);
   Debug_Print(line);
+
+  now = HAL_GetTick();
+  if ((now - last_log_tick) >= 60000U)
+  {
+    if (PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
+    {
+      log_sample.temperature_c = sht_temperature;
+      log_sample.humidity_rh = sht_humidity;
+      log_sample.pressure_u7_hpa = u7_pressure;
+      log_sample.pressure_u11_hpa = u11_pressure;
+      log_sample.adc[0] = adc[0];
+      log_sample.adc[1] = adc[1];
+      log_sample.adc[2] = adc[2];
+      log_sample.adc[3] = adc[3];
+      (void)DataLogger_Append(&log_sample, 3000U);
+    }
+    last_log_tick = now;
+  }
 }
 
 /* USER CODE END 4 */
