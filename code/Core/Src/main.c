@@ -352,7 +352,7 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
   dt->year=yy;dt->month=mo;dt->day=da;dt->hours=hh;dt->minutes=mi;dt->seconds=se;dt->weekday=Serial_Weekday(year,mo,da);dt->century=0U;return 1;
 }
 
-static void Serial_PrintSettingHelp(void){Debug_Print("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nexit\r\n");}
+static void Serial_PrintSettingHelp(void){Debug_Print("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog dump\r\nlog clear\r\nexit\r\n");}
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
@@ -372,12 +372,37 @@ static void Serial_ProcessCommand(void)
   g_uart_line_overflow=0U;
   if(overflow){Debug_Print("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
-  if(Serial_Equals(trimmed,"log dump")){Serial_DumpLogs();return;}
-  if(Serial_Equals(trimmed,"log info")){char line[96];(void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu\r\n",(unsigned long)DataLogger_Count(),(unsigned long)DataLogger_Capacity());Debug_Print(line);return;}
-  if(Serial_Equals(trimmed,"log clear")){Debug_Print(DataLogger_Clear(3000U)==HAL_OK?"LOG CLEAR OK\r\n":"LOG CLEAR ERROR\r\n");return;}
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
   if(Serial_Equals(trimmed,"exit")){if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
-  if(g_rtc_setting_mode){if(strlen(trimmed)>=3U&&(Serial_ToLower(trimmed[0])=='s')&&(Serial_ToLower(trimmed[1])=='e')&&(Serial_ToLower(trimmed[2])=='t'))Serial_HandleSetTime(trimmed);else Debug_Print("Unknown setting command\r\n");}
+  if(g_rtc_setting_mode)
+  {
+    if(Serial_Equals(trimmed,"log dump"))
+    {
+      Serial_DumpLogs();
+    }
+    else if(Serial_Equals(trimmed,"log info"))
+    {
+      char line[96];
+      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu\r\n",
+                     (unsigned long)DataLogger_Count(),
+                     (unsigned long)DataLogger_Capacity());
+      Debug_Print(line);
+    }
+    else if(Serial_Equals(trimmed,"log clear"))
+    {
+      Debug_Print(DataLogger_Clear(3000U)==HAL_OK ?
+                  "LOG CLEAR OK\r\n" : "LOG CLEAR ERROR\r\n");
+    }
+    else if(strlen(trimmed)>=3U && Serial_ToLower(trimmed[0])=='s' &&
+            Serial_ToLower(trimmed[1])=='e' && Serial_ToLower(trimmed[2])=='t')
+    {
+      Serial_HandleSetTime(trimmed);
+    }
+    else
+    {
+      Debug_Print("Unknown setting command\r\n");
+    }
+  }
 }
 
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
