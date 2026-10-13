@@ -37,6 +37,7 @@
 
 #define BOOT_INIT_RETRIES 3U
 #define BOOT_INIT_TIMEOUT 100U
+#define SAMPLE_PERIOD_MS 20U
 
 /* USER CODE END Includes */
 
@@ -132,7 +133,7 @@ int main(void)
     {
       Debug_SendSamples();
     }
-    Serial_ServiceDelay(1000);
+    Serial_ServiceDelay(SAMPLE_PERIOD_MS);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

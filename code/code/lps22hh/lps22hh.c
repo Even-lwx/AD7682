@@ -8,7 +8,7 @@
 #define LPS22HH_REG_TEMP_OUT_L    0x2BU
 #define LPS22HH_STATUS_P_DA       0x01U
 #define LPS22HH_CTRL1_BDU         0x02U
-#define LPS22HH_CTRL1_ODR_1HZ    0x10U
+#define LPS22HH_CTRL1_ODR_50HZ   0x40U
 #define LPS22HH_CTRL2_IF_ADD_INC 0x10U
 #define LPS22HH_CTRL2_SWRESET     0x04U
 
@@ -72,7 +72,7 @@ HAL_StatusTypeDef LPS22HH_InitDevice(SoftI2C_HandleTypeDef *handle,
     if (status == HAL_OK)
     {
         status = LPS22HH_WriteRegister(handle, device->address, LPS22HH_REG_CTRL_REG1,
-                                       LPS22HH_CTRL1_BDU | LPS22HH_CTRL1_ODR_1HZ,
+                                       LPS22HH_CTRL1_BDU | LPS22HH_CTRL1_ODR_50HZ,
                                        timeout);
     }
     return status;
