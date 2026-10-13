@@ -76,6 +76,10 @@ static uint32_t g_record_last_second;
 static uint32_t g_dump_remaining;
 static uint32_t g_dump_sequence;
 static uint8_t g_dump_newest_first;
+static float g_sht_filtered_temperature;
+static float g_sht_filtered_humidity;
+static uint8_t g_sht_filter_valid;
+static uint32_t g_sht_last_valid_tick;
 
 /* USER CODE END PV */
 
@@ -92,6 +96,7 @@ static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
+static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity);
 
 /* USER CODE END PFP */
 
@@ -566,6 +571,43 @@ static void SimulatedAdc_Read(uint16_t adc[4])
   adc[3] = 4000U;
 }
 
+static float Median3(float a, float b, float c)
+{
+  float swap;
+  if (a > b) { swap = a; a = b; b = swap; }
+  if (b > c) { b = c; c = b; b = swap; }
+  if (a > b) { b = a; }
+  return b;
+}
+
+/* 只接受成功且范围有效的测量；失败不把人为补零放进窗口。
+ * 初次成功填满窗口，后续三点中值去除孤立尖峰，不禁止真实零值。
+ * 串口允许短期保持上次结果，但超过 5 秒未成功更新不写入历史。 */
+static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity)
+{
+  static float temperatures[3];
+  static float humidities[3];
+  static uint8_t index;
+  uint8_t i;
+  if (status != HAL_OK || !(temperature >= -40.0f && temperature <= 125.0f) ||
+      !(humidity >= 0.0f && humidity <= 100.0f)) { return; }
+  if (!g_sht_filter_valid)
+  {
+    for (i = 0U; i < 3U; i++)
+    {
+      temperatures[i] = temperature;
+      humidities[i] = humidity;
+    }
+    g_sht_filter_valid = 1U;
+  }
+  temperatures[index] = temperature;
+  humidities[index] = humidity;
+  index = (uint8_t)((index + 1U) % 3U);
+  g_sht_filtered_temperature = Median3(temperatures[0], temperatures[1], temperatures[2]);
+  g_sht_filtered_humidity = Median3(humidities[0], humidities[1], humidities[2]);
+  g_sht_last_valid_tick = HAL_GetTick();
+}
+
 /* FireWater 数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
  * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 模拟 ADC。 */
 static void Debug_SendSamples(void)
@@ -583,15 +625,15 @@ static void Debug_SendSamples(void)
   float u11_temperature = 0.0f;
   char line[128];
   DataLogger_Sample log_sample;
+  HAL_StatusTypeDef sht_status;
 
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
   BatteryLed_Update(battery_voltage);
-  if (SHT41_Read(&hi2c1, &sht_temperature, &sht_humidity, 100U) != HAL_OK)
-  {
-    sht_temperature = 0.0f;
-    sht_humidity = 0.0f;
-  }
+  sht_status = SHT41_Read(&hi2c1, &sht_temperature, &sht_humidity, 100U);
+  ShtFilter_Update(sht_status, sht_temperature, sht_humidity);
+  sht_temperature = g_sht_filtered_temperature;
+  sht_humidity = g_sht_filtered_humidity;
   if (LPS22HH_ReadDevice(&hi2c1, &g_lps22hh_u7,
                          &u7_pressure, &u7_temperature, 100U) != HAL_OK)
   {
@@ -610,7 +652,8 @@ static void Debug_SendSamples(void)
   interval = DataLogger_GetInterval();
   if ((now - g_record_last_second) >= interval)
   {
-    if (PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
+    if (g_sht_filter_valid && (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U &&
+        PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
     {
       log_sample.temperature_c = sht_temperature;
       log_sample.humidity_rh = sht_humidity;
@@ -632,7 +675,7 @@ static void Debug_SendSamples(void)
 
   /* 采样或 Flash 写入期间到达的命令，在下一行实时输出前处理。 */
   Serial_ProcessCommand();
-  if (g_rtc_setting_mode != 0U)
+  if (g_rtc_setting_mode != 0U || !g_sht_filter_valid)
   {
     return;
   }
