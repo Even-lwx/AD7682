@@ -1,8 +1,45 @@
-# Local analysis artifacts
-tmp_bq24040.pdf
-tmp_bq24040.txt
+# OS/editor metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.tmp
+*.bak
+~$*
 
-# IDE/user-local files
-*.user
-*.suo
-*.userprefs
+# Keil MDK / ARM compiler generated output
+code/MDK-ARM/DebugConfig/
+code/MDK-ARM/RTE/
+code/MDK-ARM/code/
+code/MDK-ARM/*/Objects/
+code/MDK-ARM/*/Listings/
+code/MDK-ARM/**/*.o
+code/MDK-ARM/**/*.d
+code/MDK-ARM/**/*.crf
+code/MDK-ARM/**/*.lst
+code/MDK-ARM/**/*.map
+code/MDK-ARM/**/*.axf
+code/MDK-ARM/**/*.hex
+code/MDK-ARM/**/*.bin
+code/MDK-ARM/**/*.elf
+code/MDK-ARM/**/*.scvd
+code/MDK-ARM/**/*.htm
+code/MDK-ARM/**/*.lnp
+
+# Keil user-specific workspace files
+code/MDK-ARM/*.uvguix.*
+code/MDK-ARM/*.uvoptx
+
+# Altium generated history, previews, logs and output folders
+**/History/
+**/__Previews/
+**/Project Logs/
+**/Project Outputs/
+
+# Temporary analysis/export artifacts
+tmp_*.pdf
+tmp_*.txt
+
+# Local measurement workbooks
+LP5907_3-2V电压变化.xlsx
