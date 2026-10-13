@@ -61,11 +61,16 @@
 
 /* USER CODE BEGIN PV */
 volatile uint8_t g_uart_rx_byte;
-volatile uint8_t g_uart_line_ready;
-volatile uint8_t g_uart_line_overflow;
 volatile uint8_t g_rtc_setting_mode;
+/* 单生产者(USART ISR)/单消费者(主循环)，可缓存连续多条命令。 */
+#define UART_RX_RING_SIZE 512U
+static volatile uint8_t g_uart_rx_ring[UART_RX_RING_SIZE];
+static volatile uint16_t g_uart_rx_head;
+static volatile uint16_t g_uart_rx_tail;
+static volatile uint8_t g_uart_rx_fault;
 static char g_uart_line[64];
 static uint8_t g_uart_line_length;
+static uint8_t g_uart_discard_line;
 volatile uint32_t g_record_timer_seconds;
 static uint32_t g_record_last_second;
 static uint32_t g_dump_remaining;
@@ -338,28 +343,85 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
   {
-    if (g_uart_rx_byte == '\r' || g_uart_rx_byte == '\n')
+    uint16_t next = (uint16_t)((g_uart_rx_head + 1U) % UART_RX_RING_SIZE);
+    if (next != g_uart_rx_tail)
     {
-      if (g_uart_line_ready == 0U)
-      {
-        g_uart_line[g_uart_line_length] = 0;
-        g_uart_line_ready = 1U;
-      }
-      g_uart_line_length = 0U;
+      g_uart_rx_ring[g_uart_rx_head] = g_uart_rx_byte;
+      g_uart_rx_head = next;
     }
-    else if (g_uart_line_ready == 0U)
+    else
     {
-      if (g_uart_line_length < (sizeof(g_uart_line) - 1U))
-      {
-        g_uart_line[g_uart_line_length++] = (char)g_uart_rx_byte;
-      }
-      else
-      {
-        g_uart_line_overflow = 1U;
-      }
+      g_uart_rx_fault = 1U;
     }
     (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
   }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart1)
+  {
+    /* HAL 在 ORE 等错误后终止 RX；只恢复 RX，不能中止正在进行的 TX。
+       丢弃不完整命令，避免损坏的数据执行 log clear 等操作。 */
+    g_uart_rx_fault = 1U;
+    (void)HAL_UART_AbortReceive(huart);
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                               UART_CLEAR_PEF | UART_CLEAR_FEF);
+    (void)HAL_UART_Receive_IT(huart, (uint8_t *)&g_uart_rx_byte, 1U);
+  }
+}
+
+static uint8_t Serial_ReadLine(char command[64])
+{
+  while (g_uart_rx_tail != g_uart_rx_head || g_uart_rx_fault != 0U)
+  {
+    uint8_t byte;
+    uint8_t available;
+    uint32_t primask = __get_PRIMASK();
+    /* 短临界区：出错时原子清空旧数据并重新同步到下一个换行。 */
+    __disable_irq();
+    if (g_uart_rx_fault != 0U)
+    {
+      g_uart_rx_tail = g_uart_rx_head;
+      g_uart_rx_fault = 0U;
+      g_uart_line_length = 0U;
+      g_uart_discard_line = 1U;
+    }
+    available = (g_uart_rx_tail != g_uart_rx_head);
+    byte = available ? g_uart_rx_ring[g_uart_rx_tail] : 0U;
+    if (available)
+    {
+      g_uart_rx_tail = (uint16_t)((g_uart_rx_tail + 1U) % UART_RX_RING_SIZE);
+    }
+    __set_PRIMASK(primask);
+    if (!available) { return 0U; }
+    if (byte == '\r' || byte == '\n')
+    {
+      if (g_uart_discard_line)
+      {
+        g_uart_discard_line = 0U;
+        g_uart_line_length = 0U;
+        continue;
+      }
+      /* CRLF 的第二个字符及空行不产生待处理命令。 */
+      if (g_uart_line_length == 0U) { continue; }
+      g_uart_line[g_uart_line_length] = 0;
+      memcpy(command, g_uart_line, (size_t)g_uart_line_length + 1U);
+      g_uart_line_length = 0U;
+      return 1U;
+    }
+    if (g_uart_discard_line) { continue; }
+    if (g_uart_line_length < sizeof(g_uart_line) - 1U)
+    {
+      g_uart_line[g_uart_line_length++] = (char)byte;
+    }
+    else
+    {
+      g_uart_discard_line = 1U;
+      g_uart_line_length = 0U;
+    }
+  }
+  return 0U;
 }
 
 static uint8_t Serial_IsSpace(char c){return (uint8_t)(c==' '||c=='\t'||c=='\r'||c=='\n');}
@@ -396,11 +458,8 @@ static void Serial_HandleSetTime(const char *command)
 
 static void Serial_ProcessCommand(void)
 {
-  char command[64];char *trimmed;uint8_t overflow;
-  if(!g_uart_line_ready)return;
-  __disable_irq();memcpy(command,g_uart_line,sizeof(command));overflow=g_uart_line_overflow;g_uart_line_ready=0;__enable_irq();command[sizeof(command)-1U]=0;
-  g_uart_line_overflow=0U;
-  if(overflow){Debug_Print("Command error: line too long\r\n");return;}
+  char command[64];char *trimmed;
+  if(!Serial_ReadLine(command))return;
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
   if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
@@ -571,6 +630,8 @@ static void Debug_SendSamples(void)
     g_record_last_second += ((now - g_record_last_second) / interval) * interval;
   }
 
+  /* 采样或 Flash 写入期间到达的命令，在下一行实时输出前处理。 */
+  Serial_ProcessCommand();
   if (g_rtc_setting_mode != 0U)
   {
     return;
