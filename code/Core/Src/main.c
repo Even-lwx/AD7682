@@ -71,9 +71,8 @@ static uint8_t g_uart_line_length;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void Debug_Print(const char *text);
-static void Debug_RunTests(void);
-static void Debug_FlashReadWriteTest(void);
 static void Debug_BootInitializeDevices(void);
+static void Debug_SendSamples(void);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
@@ -121,8 +120,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
   Debug_BootInitializeDevices();
-  /* Run once per boot, not every second, to limit flash erase wear. */
-  Debug_FlashReadWriteTest();
 
   /* USER CODE END 2 */
 
@@ -133,7 +130,7 @@ int main(void)
     Serial_ProcessCommand();
     if (!g_rtc_setting_mode)
     {
-      Debug_RunTests();
+      Debug_SendSamples();
     }
     Serial_ServiceDelay(1000);
     /* USER CODE END WHILE */
@@ -209,7 +206,6 @@ static void Debug_BootInitializeDevices(void)
   float humidity = 0.0f;
   PCF8563_DateTime datetime = {0};
   HAL_StatusTypeDef status;
-  char line[160];
 
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
@@ -226,12 +222,6 @@ static void Debug_BootInitializeDevices(void)
     }
     HAL_Delay(10U);
   }
-  (void)snprintf(line, sizeof(line),
-                 "BOOT SHT41: status=%d retries=%u T=%.2f RH=%.2f\r\n",
-                 (int)status, (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)),
-                 (double)temperature, (double)humidity);
-  Debug_Print(line);
-
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -246,12 +236,6 @@ static void Debug_BootInitializeDevices(void)
     }
     HAL_Delay(10U);
   }
-  (void)snprintf(line, sizeof(line),
-                 "BOOT PCF8563: status=%d retries=%u\r\n",
-                 (int)status,
-                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
-  Debug_Print(line);
-
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -263,13 +247,6 @@ static void Debug_BootInitializeDevices(void)
     status = HAL_ERROR;
     HAL_Delay(10U);
   }
-  (void)snprintf(line, sizeof(line),
-                 "BOOT W25Q128: status=%d retries=%u ID=%02X %02X %02X\r\n",
-                 (int)status,
-                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)),
-                 id[0], id[1], id[2]);
-  Debug_Print(line);
-
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -280,11 +257,6 @@ static void Debug_BootInitializeDevices(void)
     }
     HAL_Delay(10U);
   }
-  (void)snprintf(line, sizeof(line), "BOOT LPS22HH U7: status=%d retries=%u\r\n",
-                 (int)status,
-                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
-  Debug_Print(line);
-
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -295,10 +267,6 @@ static void Debug_BootInitializeDevices(void)
     }
     HAL_Delay(10U);
   }
-  (void)snprintf(line, sizeof(line), "BOOT LPS22HH U11: status=%d retries=%u\r\n",
-                 (int)status,
-                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
-  Debug_Print(line);
 }
 
 /* PA15/LED2 电量指示：低电平点亮，高电平熄灭。 */
@@ -406,8 +374,47 @@ static void Serial_ProcessCommand(void)
 
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
 
-static void Debug_FlashReadWriteTest(void){uint8_t tx[16],rx[16],id[3];uint32_t i;HAL_StatusTypeDef s;char l[96];s=W25Q128_ReadJedec(&hspi2,id,100);if(s!=HAL_OK||id[0]!=0xEF||id[1]!=0x40||id[2]!=0x18){Debug_Print("Flash test: SKIP\r\n");return;}s=W25Q128_EraseSector(&hspi2,0xFFF000,3000);if(s!=HAL_OK){Debug_Print("Flash erase: FAIL\r\n");return;}for(i=0;i<sizeof(tx);i++)tx[i]=(uint8_t)(i^0xA5);s=W25Q128_Write(&hspi2,0xFFF000,tx,sizeof(tx),100);if(s==HAL_OK)s=W25Q128_Read(&hspi2,0xFFF000,rx,sizeof(rx),100);for(i=0;i<sizeof(tx)&&s==HAL_OK;i++)if(tx[i]!=rx[i])break;(void)snprintf(l,sizeof(l),"Flash RW test: %s\r\n",(s==HAL_OK&&i==sizeof(tx))?"PASS":"FAIL");Debug_Print(l);(void)W25Q128_EraseSector(&hspi2,0xFFF000,3000);}
-static void Debug_RunTests(void){char l[320];uint32_t b;float bv,t=0,r=0,pressure=0,pressure_temperature=0,pressure2=0,pressure_temperature2=0;int32_t raw1,raw2;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};LPS22HH_Diagnostic d1={0},d2={0};HAL_StatusTypeDef s,s2,sd1,sd2;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);BatteryLed_Update(bv);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);s=LPS22HH_ReadDevice(&hi2c1,&g_lps22hh_u7,&pressure,&pressure_temperature,100);s2=LPS22HH_ReadDevice(&hi2c1,&g_lps22hh_u11,&pressure2,&pressure_temperature2,100);sd1=LPS22HH_ReadDiagnostic(&hi2c1,&g_lps22hh_u7,&d1,100);sd2=LPS22HH_ReadDiagnostic(&hi2c1,&g_lps22hh_u11,&d2,100);raw1=(int32_t)(((uint32_t)d1.pressure_h<<16U)|((uint32_t)d1.pressure_l<<8U)|d1.pressure_xl);raw2=(int32_t)(((uint32_t)d2.pressure_h<<16U)|((uint32_t)d2.pressure_l<<8U)|d2.pressure_xl);(void)snprintf(l,sizeof(l),"LPS22HH U7: rd=%d diag=%d ID=%02X C1=%02X C2=%02X ST=%02X P=%02X%02X%02X raw=%ld calc=%.2f T=%.2f\r\n",(int)s,(int)sd1,d1.who_am_i,d1.ctrl_reg1,d1.ctrl_reg2,d1.status,d1.pressure_h,d1.pressure_l,d1.pressure_xl,(long)raw1,(double)((float)raw1/4096.0f),(double)pressure_temperature);Debug_Print(l);(void)snprintf(l,sizeof(l),"LPS22HH U11: rd=%d diag=%d ID=%02X C1=%02X C2=%02X ST=%02X P=%02X%02X%02X raw=%ld calc=%.2f T=%.2f\r\n",(int)s2,(int)sd2,d2.who_am_i,d2.ctrl_reg1,d2.ctrl_reg2,d2.status,d2.pressure_h,d2.pressure_l,d2.pressure_xl,(long)raw2,(double)((float)raw2/4096.0f),(double)pressure_temperature2);Debug_Print(l);(void)snprintf(l,sizeof(l),"I2C idle: SCL=%u SDA=%u\r\n",(unsigned)HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_11),(unsigned)HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_12));Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
+/* FireWater 数据行：ch0 电池电压，ch1 SHT41 温度，ch2 SHT41 湿度，
+ * ch3 U7 气压，ch4 U7 温度，ch5 U11 气压，ch6 U11 温度。 */
+static void Debug_SendSamples(void)
+{
+  uint32_t battery_raw;
+  float battery_voltage;
+  float sht_temperature = 0.0f;
+  float sht_humidity = 0.0f;
+  float u7_pressure = 0.0f;
+  float u7_temperature = 0.0f;
+  float u11_pressure = 0.0f;
+  float u11_temperature = 0.0f;
+  char line[128];
+
+  battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
+  battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
+  BatteryLed_Update(battery_voltage);
+  if (SHT41_Read(&hi2c1, &sht_temperature, &sht_humidity, 100U) != HAL_OK)
+  {
+    sht_temperature = 0.0f;
+    sht_humidity = 0.0f;
+  }
+  if (LPS22HH_ReadDevice(&hi2c1, &g_lps22hh_u7,
+                         &u7_pressure, &u7_temperature, 100U) != HAL_OK)
+  {
+    u7_pressure = 0.0f;
+    u7_temperature = 0.0f;
+  }
+  if (LPS22HH_ReadDevice(&hi2c1, &g_lps22hh_u11,
+                         &u11_pressure, &u11_temperature, 100U) != HAL_OK)
+  {
+    u11_pressure = 0.0f;
+    u11_temperature = 0.0f;
+  }
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+                 (double)battery_voltage, (double)sht_temperature,
+                 (double)sht_humidity, (double)u7_pressure,
+                 (double)u7_temperature, (double)u11_pressure,
+                 (double)u11_temperature);
+  Debug_Print(line);
+}
 
 /* USER CODE END 4 */
 
