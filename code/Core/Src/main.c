@@ -31,6 +31,7 @@
 #include "sht41.h"
 #include "pcf8563.h"
 #include "w25q128.h"
+#include "lps22hh.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -115,6 +116,27 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
+  {
+    uint8_t lps22hh_id = 0U;
+    uint8_t lps22hh_id_5c = 0U;
+    uint8_t lps22hh_id_5d = 0U;
+    HAL_StatusTypeDef lps22hh_u7_status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u7, 100U);
+    HAL_StatusTypeDef lps22hh_u11_status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u11, 100U);
+    (void)LPS22HH_ReadId(&hi2c1, &lps22hh_id, 100U);
+    HAL_StatusTypeDef id_5c_status = LPS22HH_ReadIdAtAddress(&hi2c1, LPS22HH_I2C_ADDR_LOW, &lps22hh_id_5c, 100U);
+    HAL_StatusTypeDef id_5d_status = LPS22HH_ReadIdAtAddress(&hi2c1, LPS22HH_I2C_ADDR_HIGH, &lps22hh_id_5d, 100U);
+    {
+      char line[128];
+      (void)snprintf(line, sizeof(line),
+                     "LPS22HH init: U7=%d U11=%d ID5C=%d:0x%02X ID5D=%d:0x%02X I2C=SCL%u SDA%u\r\n",
+                     (int)lps22hh_u7_status, (int)lps22hh_u11_status,
+                     (int)id_5c_status, lps22hh_id_5c,
+                     (int)id_5d_status, lps22hh_id_5d,
+                     (unsigned)HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11),
+                     (unsigned)HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12));
+      Debug_Print(line);
+    }
+  }
   /* Run once per boot, not every second, to limit flash erase wear. */
   Debug_FlashReadWriteTest();
 
@@ -293,7 +315,7 @@ static void Serial_ProcessCommand(void)
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
 
 static void Debug_FlashReadWriteTest(void){uint8_t tx[16],rx[16],id[3];uint32_t i;HAL_StatusTypeDef s;char l[96];s=W25Q128_ReadJedec(&hspi2,id,100);if(s!=HAL_OK||id[0]!=0xEF||id[1]!=0x40||id[2]!=0x18){Debug_Print("Flash test: SKIP\r\n");return;}s=W25Q128_EraseSector(&hspi2,0xFFF000,3000);if(s!=HAL_OK){Debug_Print("Flash erase: FAIL\r\n");return;}for(i=0;i<sizeof(tx);i++)tx[i]=(uint8_t)(i^0xA5);s=W25Q128_Write(&hspi2,0xFFF000,tx,sizeof(tx),100);if(s==HAL_OK)s=W25Q128_Read(&hspi2,0xFFF000,rx,sizeof(rx),100);for(i=0;i<sizeof(tx)&&s==HAL_OK;i++)if(tx[i]!=rx[i])break;(void)snprintf(l,sizeof(l),"Flash RW test: %s\r\n",(s==HAL_OK&&i==sizeof(tx))?"PASS":"FAIL");Debug_Print(l);(void)W25Q128_EraseSector(&hspi2,0xFFF000,3000);}
-static void Debug_RunTests(void){char l[160];uint32_t b;float bv,t=0,r=0;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};HAL_StatusTypeDef s;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);BatteryLed_Update(bv);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
+static void Debug_RunTests(void){char l[320];uint32_t b;float bv,t=0,r=0,pressure=0,pressure_temperature=0,pressure2=0,pressure_temperature2=0;int32_t raw1,raw2;uint8_t id[3]={0},vl=0;PCF8563_DateTime dt={0};LPS22HH_Diagnostic d1={0},d2={0};HAL_StatusTypeDef s,s2,sd1,sd2;uint8_t adbuf=0;(void)adbuf;b=BatteryAdc_ReadRaw(&hadc1,10);bv=BatteryAdc_CalibratedVoltage(b);BatteryLed_Update(bv);(void)snprintf(l,sizeof(l),"Battery ADC raw: %lu voltage: %.3f V\r\n",(unsigned long)b,(double)bv);Debug_Print(l);s=SHT41_Read(&hi2c1,&t,&r,100);(void)snprintf(l,sizeof(l),"SHT41: status=%d T=%.2f C RH=%.2f %%\r\n",(int)s,(double)t,(double)r);Debug_Print(l);s=LPS22HH_ReadDevice(&hi2c1,&g_lps22hh_u7,&pressure,&pressure_temperature,100);s2=LPS22HH_ReadDevice(&hi2c1,&g_lps22hh_u11,&pressure2,&pressure_temperature2,100);sd1=LPS22HH_ReadDiagnostic(&hi2c1,&g_lps22hh_u7,&d1,100);sd2=LPS22HH_ReadDiagnostic(&hi2c1,&g_lps22hh_u11,&d2,100);raw1=(int32_t)(((uint32_t)d1.pressure_h<<16U)|((uint32_t)d1.pressure_l<<8U)|d1.pressure_xl);raw2=(int32_t)(((uint32_t)d2.pressure_h<<16U)|((uint32_t)d2.pressure_l<<8U)|d2.pressure_xl);(void)snprintf(l,sizeof(l),"LPS22HH U7: rd=%d diag=%d ID=%02X C1=%02X C2=%02X ST=%02X P=%02X%02X%02X raw=%ld calc=%.2f T=%.2f\r\n",(int)s,(int)sd1,d1.who_am_i,d1.ctrl_reg1,d1.ctrl_reg2,d1.status,d1.pressure_h,d1.pressure_l,d1.pressure_xl,(long)raw1,(double)((float)raw1/4096.0f),(double)pressure_temperature);Debug_Print(l);(void)snprintf(l,sizeof(l),"LPS22HH U11: rd=%d diag=%d ID=%02X C1=%02X C2=%02X ST=%02X P=%02X%02X%02X raw=%ld calc=%.2f T=%.2f\r\n",(int)s2,(int)sd2,d2.who_am_i,d2.ctrl_reg1,d2.ctrl_reg2,d2.status,d2.pressure_h,d2.pressure_l,d2.pressure_xl,(long)raw2,(double)((float)raw2/4096.0f),(double)pressure_temperature2);Debug_Print(l);(void)snprintf(l,sizeof(l),"I2C idle: SCL=%u SDA=%u\r\n",(unsigned)HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_11),(unsigned)HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_12));Debug_Print(l);(void)PCF8563_GetVoltageLow(&hi2c1,&vl,100);s=PCF8563_ReadDateTime(&hi2c1,&dt,100);(void)snprintf(l,sizeof(l),"PCF8563: status=%d 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",(int)s,dt.year,dt.month,dt.day,dt.hours,dt.minutes,dt.seconds,vl);Debug_Print(l);s=W25Q128_ReadJedec(&hspi2,id,100);(void)snprintf(l,sizeof(l),"W25Q128 JEDEC: status=%d ID=%02X %02X %02X\r\n",(int)s,id[0],id[1],id[2]);Debug_Print(l);}
 
 /* USER CODE END 4 */
 
