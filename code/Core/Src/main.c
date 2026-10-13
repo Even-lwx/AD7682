@@ -35,6 +35,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define BOOT_INIT_RETRIES 3U
+#define BOOT_INIT_TIMEOUT 100U
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,6 +73,7 @@ void SystemClock_Config(void);
 static void Debug_Print(const char *text);
 static void Debug_RunTests(void);
 static void Debug_FlashReadWriteTest(void);
+static void Debug_BootInitializeDevices(void);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
@@ -116,27 +120,7 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
-  {
-    uint8_t lps22hh_id = 0U;
-    uint8_t lps22hh_id_5c = 0U;
-    uint8_t lps22hh_id_5d = 0U;
-    HAL_StatusTypeDef lps22hh_u7_status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u7, 100U);
-    HAL_StatusTypeDef lps22hh_u11_status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u11, 100U);
-    (void)LPS22HH_ReadId(&hi2c1, &lps22hh_id, 100U);
-    HAL_StatusTypeDef id_5c_status = LPS22HH_ReadIdAtAddress(&hi2c1, LPS22HH_I2C_ADDR_LOW, &lps22hh_id_5c, 100U);
-    HAL_StatusTypeDef id_5d_status = LPS22HH_ReadIdAtAddress(&hi2c1, LPS22HH_I2C_ADDR_HIGH, &lps22hh_id_5d, 100U);
-    {
-      char line[128];
-      (void)snprintf(line, sizeof(line),
-                     "LPS22HH init: U7=%d U11=%d ID5C=%d:0x%02X ID5D=%d:0x%02X I2C=SCL%u SDA%u\r\n",
-                     (int)lps22hh_u7_status, (int)lps22hh_u11_status,
-                     (int)id_5c_status, lps22hh_id_5c,
-                     (int)id_5d_status, lps22hh_id_5d,
-                     (unsigned)HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11),
-                     (unsigned)HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12));
-      Debug_Print(line);
-    }
-  }
+  Debug_BootInitializeDevices();
   /* Run once per boot, not every second, to limit flash erase wear. */
   Debug_FlashReadWriteTest();
 
@@ -208,6 +192,114 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
+
+/*
+ * 上电设备探测和初始化。
+ *
+ * MX_* 外设初始化由 CubeMX 生成，失败时会进入 Error_Handler；这里对
+ * 外部器件增加有限重试，避免器件电源/复位释放稍慢时第一次访问失败。
+ * 重试只执行无副作用的探测/配置，不在这里重复 Flash 擦除测试。
+ */
+static void Debug_BootInitializeDevices(void)
+{
+  uint8_t retry;
+  uint8_t id[3] = {0U};
+  uint8_t voltage_low = 0U;
+  float temperature = 0.0f;
+  float humidity = 0.0f;
+  PCF8563_DateTime datetime = {0};
+  HAL_StatusTypeDef status;
+  char line[160];
+
+  status = HAL_ERROR;
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    status = SHT41_Reset(&hi2c1, BOOT_INIT_TIMEOUT);
+    if (status == HAL_OK)
+    {
+      HAL_Delay(2U);
+      status = SHT41_Read(&hi2c1, &temperature, &humidity, BOOT_INIT_TIMEOUT);
+    }
+    if (status == HAL_OK)
+    {
+      break;
+    }
+    HAL_Delay(10U);
+  }
+  (void)snprintf(line, sizeof(line),
+                 "BOOT SHT41: status=%d retries=%u T=%.2f RH=%.2f\r\n",
+                 (int)status, (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)),
+                 (double)temperature, (double)humidity);
+  Debug_Print(line);
+
+  status = HAL_ERROR;
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    status = PCF8563_GetVoltageLow(&hi2c1, &voltage_low, BOOT_INIT_TIMEOUT);
+    if (status == HAL_OK)
+    {
+      status = PCF8563_ReadDateTime(&hi2c1, &datetime, BOOT_INIT_TIMEOUT);
+    }
+    if (status == HAL_OK)
+    {
+      break;
+    }
+    HAL_Delay(10U);
+  }
+  (void)snprintf(line, sizeof(line),
+                 "BOOT PCF8563: status=%d retries=%u\r\n",
+                 (int)status,
+                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
+  Debug_Print(line);
+
+  status = HAL_ERROR;
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    status = W25Q128_ReadJedec(&hspi2, id, BOOT_INIT_TIMEOUT);
+    if (status == HAL_OK && id[0] == 0xEFU && id[1] == 0x40U && id[2] == 0x18U)
+    {
+      break;
+    }
+    status = HAL_ERROR;
+    HAL_Delay(10U);
+  }
+  (void)snprintf(line, sizeof(line),
+                 "BOOT W25Q128: status=%d retries=%u ID=%02X %02X %02X\r\n",
+                 (int)status,
+                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)),
+                 id[0], id[1], id[2]);
+  Debug_Print(line);
+
+  status = HAL_ERROR;
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u7, BOOT_INIT_TIMEOUT);
+    if (status == HAL_OK)
+    {
+      break;
+    }
+    HAL_Delay(10U);
+  }
+  (void)snprintf(line, sizeof(line), "BOOT LPS22HH U7: status=%d retries=%u\r\n",
+                 (int)status,
+                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
+  Debug_Print(line);
+
+  status = HAL_ERROR;
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u11, BOOT_INIT_TIMEOUT);
+    if (status == HAL_OK)
+    {
+      break;
+    }
+    HAL_Delay(10U);
+  }
+  (void)snprintf(line, sizeof(line), "BOOT LPS22HH U11: status=%d retries=%u\r\n",
+                 (int)status,
+                 (unsigned)(retry + ((status == HAL_OK) ? 1U : 0U)));
+  Debug_Print(line);
+}
 
 /* PA15/LED2 电量指示：低电平点亮，高电平熄灭。 */
 static void BatteryLed_Update(float voltage)
