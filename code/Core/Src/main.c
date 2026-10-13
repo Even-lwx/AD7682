@@ -462,6 +462,13 @@ static void Debug_SendSamples(void)
   char line[128];
   DataLogger_Sample log_sample;
 
+  /* setting 命令可能在一次 I2C 采样过程中到达；避免本次采样完成后
+     仍向串口发送一行实时数据。 */
+  if (g_rtc_setting_mode != 0U)
+  {
+    return;
+  }
+
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
   BatteryLed_Update(battery_voltage);
@@ -483,6 +490,10 @@ static void Debug_SendSamples(void)
     u11_temperature = 0.0f;
   }
   SimulatedAdc_Read(adc);
+  if (g_rtc_setting_mode != 0U)
+  {
+    return;
+  }
   (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
