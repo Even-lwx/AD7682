@@ -150,5 +150,16 @@ void USART1_IRQHandler(void)
 /* USER CODE END USART1_IRQn 0 */
 
 /* USER CODE BEGIN 1 */
+extern volatile uint32_t g_record_timer_seconds;
+
+void TIM14_IRQHandler(void)
+{
+  if ((TIM14->SR & TIM_SR_UIF) != 0U)
+  {
+    TIM14->SR &= (uint32_t)~TIM_SR_UIF;
+    /* 中断仅更新时间基准，禁止 I2C/SPI、打印和 HAL_Delay。 */
+    g_record_timer_seconds++;
+  }
+}
 
 /* USER CODE END 1 */

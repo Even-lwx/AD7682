@@ -66,6 +66,11 @@ volatile uint8_t g_uart_line_overflow;
 volatile uint8_t g_rtc_setting_mode;
 static char g_uart_line[64];
 static uint8_t g_uart_line_length;
+volatile uint32_t g_record_timer_seconds;
+static uint32_t g_record_last_second;
+static uint32_t g_dump_remaining;
+static uint32_t g_dump_sequence;
+static uint8_t g_dump_newest_first;
 
 /* USER CODE END PV */
 
@@ -77,6 +82,7 @@ static void Debug_BootInitializeDevices(void);
 static void Debug_SendSamples(void);
 static void SimulatedAdc_Read(uint16_t adc[4]);
 static void Serial_DumpLogs(void);
+static void RecordTimer_Init(void);
 static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
@@ -126,6 +132,7 @@ int main(void)
   HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
   Debug_BootInitializeDevices();
   (void)DataLogger_Init(&hspi2, BOOT_INIT_TIMEOUT);
+  RecordTimer_Init();
 
   /* USER CODE END 2 */
 
@@ -136,6 +143,7 @@ int main(void)
     Serial_ProcessCommand();
     /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
     Debug_SendSamples();
+    Serial_DumpLogs();
     Serial_ServiceDelay(SAMPLE_PERIOD_MS);
     /* USER CODE END WHILE */
 
@@ -193,6 +201,28 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
+
+/* TIM14 内部时钟，无外部引脚。APB 分频为 1 时 TIMCLK=PCLK，
+ * 否则 TIMCLK=2*PCLK；分频至 10 kHz，再每 10000 拍产生一次中断。
+ * 直接使用 CMSIS 寄存器，不依赖未启用的 HAL TIM 模块。 */
+static void RecordTimer_Init(void)
+{
+  uint32_t clock = HAL_RCC_GetPCLK1Freq();
+  if ((RCC->CFGR & RCC_CFGR_PPRE) != 0U) { clock *= 2U; }
+  __HAL_RCC_TIM14_CLK_ENABLE();
+  TIM14->CR1 = 0U;
+  TIM14->PSC = clock / 10000U - 1U;
+  TIM14->ARR = 9999U;
+  TIM14->EGR = TIM_EGR_UG;
+  TIM14->SR = 0U;
+  g_record_timer_seconds = 0U;
+  g_record_last_second = 0U;
+  TIM14->DIER = TIM_DIER_UIE;
+  HAL_NVIC_SetPriority(TIM14_IRQn, 2U, 0U);
+  HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+  HAL_NVIC_EnableIRQ(TIM14_IRQn);
+  TIM14->CR1 = TIM_CR1_CEN;
+}
 
 /*
  * 上电设备探测和初始化。
@@ -373,12 +403,15 @@ static void Serial_ProcessCommand(void)
   if(overflow){Debug_Print("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
-  if(Serial_Equals(trimmed,"exit")){if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
+  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
   {
     if(Serial_Equals(trimmed,"log dump"))
     {
-      Serial_DumpLogs();
+      g_dump_remaining = DataLogger_Count();
+      g_dump_newest_first = DataLogger_GetDumpNewestFirst();
+      g_dump_sequence = g_dump_newest_first ? DataLogger_LastSequence() :
+                        DataLogger_LastSequence() - g_dump_remaining + 1U;
     }
     else if(Serial_Equals(trimmed,"log info"))
     {
@@ -396,6 +429,7 @@ static void Serial_ProcessCommand(void)
       if(Serial_ParseUint32(&trimmed[13],&seconds) &&
          DataLogger_SetInterval(seconds,3000U)==HAL_OK)
       {
+        g_record_last_second = g_record_timer_seconds;
         Debug_Print("LOG INTERVAL OK\r\n");
       }
       else
@@ -415,6 +449,7 @@ static void Serial_ProcessCommand(void)
     }
     else if(Serial_Equals(trimmed,"log clear"))
     {
+      g_dump_remaining = 0U;
       Debug_Print(DataLogger_Clear(3000U)==HAL_OK ?
                   "LOG CLEAR OK\r\n" : "LOG CLEAR ERROR\r\n");
     }
@@ -434,21 +469,20 @@ static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elap
 
 static void Serial_DumpLogs(void)
 {
-  uint32_t i;
-  uint32_t count = DataLogger_Count();
   uint16_t year;
   char line[180];
   DataLogger_Sample sample;
 
-  for (i = 0U; i < count; i++)
+  /* 每次主循环只发送一条，不阻塞采样、记录和命令处理。
+     固定序号快照：导出期间新增记录不混入本次导出。 */
+  if (g_dump_remaining != 0U && g_rtc_setting_mode != 0U)
   {
-    uint32_t ordinal = DataLogger_GetDumpNewestFirst() ? (count - 1U - i) : i;
-    /* 大量历史数据导出也必须给采样和自动记录调度机会。
-       dump 仅在 setting 内调用，因此不会混入实时输出。 */
-    Debug_SendSamples();
-    if (DataLogger_Read(ordinal, &sample, 100U) != HAL_OK)
+    uint32_t sequence = g_dump_sequence;
+    g_dump_sequence = g_dump_newest_first ? sequence - 1U : sequence + 1U;
+    g_dump_remaining--;
+    if (DataLogger_ReadSequence(sequence, &sample, 100U) != HAL_OK)
     {
-      continue;
+      return;
     }
     year = (uint16_t)(sample.datetime.year +
                       ((sample.datetime.century != 0U) ? 1900U : 2000U));
@@ -477,9 +511,9 @@ static void SimulatedAdc_Read(uint16_t adc[4])
  * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 模拟 ADC。 */
 static void Debug_SendSamples(void)
 {
-  static uint32_t last_log_tick;
   uint32_t battery_raw;
   uint32_t now;
+  uint32_t interval;
   uint16_t adc[4];
   float battery_voltage;
   float sht_temperature = 0.0f;
@@ -513,8 +547,9 @@ static void Debug_SendSamples(void)
   }
   SimulatedAdc_Read(adc);
 
-  now = HAL_GetTick();
-  if ((now - last_log_tick) >= (DataLogger_GetInterval() * 1000UL))
+  now = g_record_timer_seconds;
+  interval = DataLogger_GetInterval();
+  if ((now - g_record_last_second) >= interval)
   {
     if (PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
     {
@@ -526,9 +561,14 @@ static void Debug_SendSamples(void)
       log_sample.adc[1] = adc[1];
       log_sample.adc[2] = adc[2];
       log_sample.adc[3] = adc[3];
-      (void)DataLogger_Append(&log_sample, 3000U);
+      if (DataLogger_Append(&log_sample, 3000U) != HAL_OK)
+      {
+        if (g_rtc_setting_mode) { Debug_Print("LOG WRITE ERROR\r\n"); }
+      }
     }
-    last_log_tick = now;
+    /* 按原定时基准推进，不把采样/写入耗时累计进记录周期。
+       超时后不伪造缺失时刻的历史样本。 */
+    g_record_last_second += ((now - g_record_last_second) / interval) * interval;
   }
 
   if (g_rtc_setting_mode != 0U)

@@ -307,6 +307,32 @@ uint32_t DataLogger_Count(void)
     return g_logger_count;
 }
 
+uint32_t DataLogger_LastSequence(void)
+{
+    return g_logger_sequence;
+}
+
+HAL_StatusTypeDef DataLogger_ReadSequence(uint32_t sequence,
+                                         DataLogger_Sample *sample,
+                                         uint32_t timeout)
+{
+    uint8_t record[LOGGER_RECORD_SIZE];
+    uint32_t age = g_logger_sequence - sequence;
+    uint32_t index;
+    if (g_logger_spi == NULL || sample == NULL || age >= g_logger_count)
+    {
+        return HAL_ERROR;
+    }
+    index = (g_logger_head + LOGGER_MAX_RECORDS - 1U - age) % LOGGER_MAX_RECORDS;
+    if (W25Q128_Read(g_logger_spi, index * LOGGER_RECORD_SIZE,
+                    record, sizeof(record), timeout) != HAL_OK ||
+        Logger_Get32(&record[4]) != sequence)
+    {
+        return HAL_ERROR;
+    }
+    return Logger_DecodeSample(record, sample);
+}
+
 uint32_t DataLogger_Capacity(void)
 {
     return LOGGER_MAX_RECORDS;
