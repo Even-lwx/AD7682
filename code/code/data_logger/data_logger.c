@@ -12,12 +12,15 @@
 #define LOGGER_RECORD_MAGIC     0x4C47U
 #define LOGGER_META_MAGIC       0x4D47U
 #define LOGGER_VERSION          1U
+#define LOGGER_DEFAULT_INTERVAL 60UL
 
 static SPI_HandleTypeDef *g_logger_spi;
 static uint32_t g_logger_head;
 static uint32_t g_logger_count;
 static uint32_t g_logger_sequence;
 static uint32_t g_logger_meta_slot;
+static uint32_t g_logger_interval = LOGGER_DEFAULT_INTERVAL;
+static uint8_t g_logger_dump_newest_first;
 
 static uint16_t Logger_Crc16(const uint8_t *data, uint32_t length)
 {
@@ -139,6 +142,8 @@ static HAL_StatusTypeDef Logger_WriteMetadata(uint32_t timeout)
     Logger_Put32(&meta[8], g_logger_count);
     Logger_Put32(&meta[12], g_logger_sequence);
     Logger_Put32(&meta[16], g_logger_meta_slot);
+    Logger_Put32(&meta[20], g_logger_interval);
+    meta[24] = g_logger_dump_newest_first;
     Logger_Put16(&meta[30], Logger_Crc16(meta, 30U));
     address = LOGGER_META_ADDRESS + g_logger_meta_slot * LOGGER_META_SIZE;
     if (W25Q128_Write(g_logger_spi, address, meta, sizeof(meta), timeout) != HAL_OK)
@@ -165,6 +170,8 @@ HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout)
     g_logger_count = 0U;
     g_logger_sequence = 0U;
     g_logger_meta_slot = 0U;
+    g_logger_interval = LOGGER_DEFAULT_INTERVAL;
+    g_logger_dump_newest_first = 0U;
 
     for (slot = 0U; slot < LOGGER_META_SLOTS; slot++)
     {
@@ -179,6 +186,14 @@ HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout)
         g_logger_head = Logger_Get32(&meta[4]);
         g_logger_count = Logger_Get32(&meta[8]);
         g_logger_sequence = Logger_Get32(&meta[12]);
+        if (Logger_Get32(&meta[20]) != 0xFFFFFFFFUL && Logger_Get32(&meta[20]) != 0U)
+        {
+            g_logger_interval = Logger_Get32(&meta[20]);
+        }
+        if (meta[24] != 0xFFU)
+        {
+            g_logger_dump_newest_first = (meta[24] != 0U) ? 1U : 0U;
+        }
         latest_slot = slot;
         found = 1U;
     }
@@ -261,7 +276,30 @@ HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout)
     g_logger_count = 0U;
     g_logger_sequence = 0U;
     g_logger_meta_slot = 0U;
+    g_logger_interval = LOGGER_DEFAULT_INTERVAL;
+    g_logger_dump_newest_first = 0U;
     return HAL_OK;
+}
+
+HAL_StatusTypeDef DataLogger_SetInterval(uint32_t seconds, uint32_t timeout)
+{
+    if (seconds == 0U || seconds > 86400UL || g_logger_spi == NULL)
+    {
+        return HAL_ERROR;
+    }
+    g_logger_interval = seconds;
+    return Logger_WriteMetadata(timeout);
+}
+
+HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
+                                                uint32_t timeout)
+{
+    if (g_logger_spi == NULL)
+    {
+        return HAL_ERROR;
+    }
+    g_logger_dump_newest_first = (newest_first != 0U) ? 1U : 0U;
+    return Logger_WriteMetadata(timeout);
 }
 
 uint32_t DataLogger_Count(void)
@@ -272,4 +310,14 @@ uint32_t DataLogger_Count(void)
 uint32_t DataLogger_Capacity(void)
 {
     return LOGGER_MAX_RECORDS;
+}
+
+uint32_t DataLogger_GetInterval(void)
+{
+    return g_logger_interval;
+}
+
+uint8_t DataLogger_GetDumpNewestFirst(void)
+{
+    return g_logger_dump_newest_first;
 }

@@ -22,7 +22,12 @@ HAL_StatusTypeDef DataLogger_Read(uint32_t ordinal,
                                   DataLogger_Sample *sample,
                                   uint32_t timeout);
 HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout);
+HAL_StatusTypeDef DataLogger_SetInterval(uint32_t seconds, uint32_t timeout);
+HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
+                                                uint32_t timeout);
 uint32_t DataLogger_Count(void);
 uint32_t DataLogger_Capacity(void);
+uint32_t DataLogger_GetInterval(void);
+uint8_t DataLogger_GetDumpNewestFirst(void);
 
 #endif /* DATA_LOGGER_H */

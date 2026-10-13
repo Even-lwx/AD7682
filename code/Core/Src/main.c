@@ -77,6 +77,7 @@ static void Debug_BootInitializeDevices(void);
 static void Debug_SendSamples(void);
 static void SimulatedAdc_Read(uint16_t adc[4]);
 static void Serial_DumpLogs(void);
+static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
@@ -338,6 +339,7 @@ static uint8_t Serial_ToLower(char c){return (uint8_t)((c>='A'&&c<='Z')?(c+('a'-
 static uint8_t Serial_Equals(const char *a,const char *b){while(*a&&*b&&Serial_ToLower(*a)==Serial_ToLower(*b)){a++;b++;}return (uint8_t)(*a==0&&*b==0);}
 static char *Serial_Trim(char *s){char *e;while(Serial_IsSpace(*s))s++;e=s+strlen(s);while(e>s&&Serial_IsSpace(e[-1]))e--;*e=0;return s;}
 static uint8_t Serial_Digits(const char *s,uint8_t n,uint8_t *value){uint8_t i,v=0;if(!s||!value)return 0;for(i=0;i<n;i++){if(s[i]<'0'||s[i]>'9')return 0;v=(uint8_t)(v*10U+(uint8_t)(s[i]-'0'));}*value=v;return 1;}
+static uint8_t Serial_ParseUint32(const char *text,uint32_t *value){uint32_t v=0U;const char *p=text;if(!text||!value||*text==0)return 0U;while(*p){if(*p<'0'||*p>'9'||v>429496729U)return 0U;v=v*10U+(uint32_t)(*p-'0');p++;}*value=v;return 1U;}
 static uint8_t Serial_IsLeap(uint16_t year){return (uint8_t)((year%4U==0U&&year%100U!=0U)||(year%400U==0U));}
 static uint8_t Serial_DaysInMonth(uint16_t year,uint8_t month){static const uint8_t days[]={31,28,31,30,31,30,31,31,30,31,30,31};if(month==2U&&Serial_IsLeap(year))return 29U;return days[month-1U];}
 static uint8_t Serial_Weekday(uint16_t year,uint8_t month,uint8_t day){uint32_t days=0;uint16_t y;uint8_t m;for(y=2000U;y<year;y++)days+=Serial_IsLeap(y)?366U:365U;for(m=1U;m<month;m++)days+=Serial_DaysInMonth(year,m);days+=(uint32_t)(day-1U);return (uint8_t)((6U+days)%7U);}
@@ -352,7 +354,7 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
   dt->year=yy;dt->month=mo;dt->day=da;dt->hours=hh;dt->minutes=mi;dt->seconds=se;dt->weekday=Serial_Weekday(year,mo,da);dt->century=0U;return 1;
 }
 
-static void Serial_PrintSettingHelp(void){Debug_Print("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog dump\r\nlog clear\r\nexit\r\n");}
+static void Serial_PrintSettingHelp(void){Debug_Print("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
@@ -382,11 +384,36 @@ static void Serial_ProcessCommand(void)
     }
     else if(Serial_Equals(trimmed,"log info"))
     {
-      char line[96];
-      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu\r\n",
+      char line[128];
+      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu interval=%lus order=%s\r\n",
                      (unsigned long)DataLogger_Count(),
-                     (unsigned long)DataLogger_Capacity());
+                     (unsigned long)DataLogger_Capacity(),
+                     (unsigned long)DataLogger_GetInterval(),
+                     DataLogger_GetDumpNewestFirst() ? "newest-first" : "oldest-first");
       Debug_Print(line);
+    }
+    else if(strncmp(trimmed,"log interval ",13U)==0)
+    {
+      uint32_t seconds;
+      if(Serial_ParseUint32(&trimmed[13],&seconds) &&
+         DataLogger_SetInterval(seconds,3000U)==HAL_OK)
+      {
+        Debug_Print("LOG INTERVAL OK\r\n");
+      }
+      else
+      {
+        Debug_Print("LOG INTERVAL ERROR: use log interval 1..86400\r\n");
+      }
+    }
+    else if(Serial_Equals(trimmed,"log order old") || Serial_Equals(trimmed,"log order oldest"))
+    {
+      Debug_Print(DataLogger_SetDumpNewestFirst(0U,3000U)==HAL_OK ?
+                  "LOG ORDER OK: oldest-first\r\n" : "LOG ORDER ERROR\r\n");
+    }
+    else if(Serial_Equals(trimmed,"log order new") || Serial_Equals(trimmed,"log order newest"))
+    {
+      Debug_Print(DataLogger_SetDumpNewestFirst(1U,3000U)==HAL_OK ?
+                  "LOG ORDER OK: newest-first\r\n" : "LOG ORDER ERROR\r\n");
     }
     else if(Serial_Equals(trimmed,"log clear"))
     {
@@ -417,7 +444,8 @@ static void Serial_DumpLogs(void)
 
   for (i = 0U; i < count; i++)
   {
-    if (DataLogger_Read(i, &sample, 100U) != HAL_OK)
+    uint32_t ordinal = DataLogger_GetDumpNewestFirst() ? (count - 1U - i) : i;
+    if (DataLogger_Read(ordinal, &sample, 100U) != HAL_OK)
     {
       continue;
     }
@@ -503,7 +531,7 @@ static void Debug_SendSamples(void)
   Debug_Print(line);
 
   now = HAL_GetTick();
-  if ((now - last_log_tick) >= 60000U)
+  if ((now - last_log_tick) >= (DataLogger_GetInterval() * 1000UL))
   {
     if (PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
     {
