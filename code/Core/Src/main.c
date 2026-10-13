@@ -134,10 +134,8 @@ int main(void)
   while (1)
   {
     Serial_ProcessCommand();
-    if (!g_rtc_setting_mode)
-    {
-      Debug_SendSamples();
-    }
+    /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
+    Debug_SendSamples();
     Serial_ServiceDelay(SAMPLE_PERIOD_MS);
     /* USER CODE END WHILE */
 
@@ -445,6 +443,9 @@ static void Serial_DumpLogs(void)
   for (i = 0U; i < count; i++)
   {
     uint32_t ordinal = DataLogger_GetDumpNewestFirst() ? (count - 1U - i) : i;
+    /* 大量历史数据导出也必须给采样和自动记录调度机会。
+       dump 仅在 setting 内调用，因此不会混入实时输出。 */
+    Debug_SendSamples();
     if (DataLogger_Read(ordinal, &sample, 100U) != HAL_OK)
     {
       continue;
@@ -490,13 +491,6 @@ static void Debug_SendSamples(void)
   char line[128];
   DataLogger_Sample log_sample;
 
-  /* setting 命令可能在一次 I2C 采样过程中到达；避免本次采样完成后
-     仍向串口发送一行实时数据。 */
-  if (g_rtc_setting_mode != 0U)
-  {
-    return;
-  }
-
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
   BatteryLed_Update(battery_voltage);
@@ -518,17 +512,6 @@ static void Debug_SendSamples(void)
     u11_temperature = 0.0f;
   }
   SimulatedAdc_Read(adc);
-  if (g_rtc_setting_mode != 0U)
-  {
-    return;
-  }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
-                 (double)battery_voltage, (double)sht_temperature,
-                 (double)sht_humidity, (double)u7_pressure,
-                 (double)u7_temperature, (double)u11_pressure,
-                 (double)u11_temperature, (unsigned)adc[0],
-                 (unsigned)adc[1], (unsigned)adc[2], (unsigned)adc[3]);
-  Debug_Print(line);
 
   now = HAL_GetTick();
   if ((now - last_log_tick) >= (DataLogger_GetInterval() * 1000UL))
@@ -547,6 +530,18 @@ static void Debug_SendSamples(void)
     }
     last_log_tick = now;
   }
+
+  if (g_rtc_setting_mode != 0U)
+  {
+    return;
+  }
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
+                 (double)battery_voltage, (double)sht_temperature,
+                 (double)sht_humidity, (double)u7_pressure,
+                 (double)u7_temperature, (double)u11_pressure,
+                 (double)u11_temperature, (unsigned)adc[0],
+                 (unsigned)adc[1], (unsigned)adc[2], (unsigned)adc[3]);
+  Debug_Print(line);
 }
 
 /* USER CODE END 4 */
