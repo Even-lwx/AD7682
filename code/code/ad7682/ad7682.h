@@ -26,7 +26,13 @@ typedef struct
 /* 初始化 SPI、CNV 引脚和参考电压参数。 */
 AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
                           float vref_volts);
-/* 启动一次转换并返回 16 位原始码。 */
+/* Read IN0..IN3, including configuration pipeline latency and readback clocking.
+ * Output is unchanged on error. timeout_ms is per SPI transaction. */
+AD7682_Status AD7682_ReadChannel(AD7682_Handle *dev, uint8_t channel,
+                                 uint16_t *code, uint32_t timeout_ms);
+AD7682_Status AD7682_ReadFourChannels(AD7682_Handle *dev, uint16_t codes[4],
+                                      uint32_t timeout_ms);
+/* Compatibility interface: reads IN0. */
 AD7682_Status AD7682_ReadRaw(AD7682_Handle *dev, uint16_t *code,
                              uint32_t timeout_ms);
 /* 读取原始码并按参考电压换算为伏特。 */

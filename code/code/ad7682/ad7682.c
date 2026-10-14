@@ -1,84 +1,129 @@
 #include "ad7682.h"
 
-/* AD7682 驱动：通过 CNV 启动转换，再使用 SPI 读取 16 位 MSB 数据。 */
+/* Datasheet Rev.B pp.24-25,28: single-ended GND, full BW,
+ * external REF (internal reference/buffer off), sequencer off, RB enabled. */
+#define AD7682_CFG_BASE 0x3C70U
 
-/* AD7682 datasheet: CNV high starts acquisition/conversion; after tCONV,
- * 16 SCK falling edges shift out MSB-first conversion data. */
 static void AD7682_DelayUs(uint32_t us)
 {
-    uint32_t loops;
+    volatile uint32_t loops = (SystemCoreClock / 1000000UL) * us;
+    while (loops-- != 0U) { __NOP(); }
+}
 
-    /* The loop is deliberately conservative; conversion timing is not a
-     * precision timebase. The SPI transaction remains the timing authority. */
-    loops = (SystemCoreClock / 1000000UL / 5UL) * us;
-    while (loops-- != 0U)
+/* 完成一次“启动转换、发送 CFG、读取数据/回读”的完整 SPI 事务。
+ * 不使用 BUSY，CNV 保持低电平结束，下一次调用产生新的上升沿。
+ * 时序余量按 VDD=3 V、tCONV(max)=3.2 us、tACQ(min)=1.8 us 设置。 */
+static AD7682_Status AD7682_Transfer(AD7682_Handle *dev, uint16_t cfg,
+                                    uint16_t *raw, uint16_t *readback,
+                                    uint32_t timeout_ms)
+{
+    uint16_t wire = (uint16_t)(cfg << 2);
+    uint8_t tx[4];
+    uint8_t rx[4] = {0U};
+    HAL_StatusTypeDef status;
+    tx[0] = (uint8_t)(wire >> 8);
+    tx[1] = (uint8_t)wire;
+    tx[2] = 0U;
+    tx[3] = 0U;
+    HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_SET);
+    /* tCONV(max)=3.2 us; keep CNV high well past EOC. */
+    AD7682_DelayUs(10U);
+    HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
+    /* tACQ(min)=1.8 us before the serial transfer. */
+    AD7682_DelayUs(5U);
+    /* 16 data + 14 CFG bits; final two clocks are ignored (SDO high-Z). */
+    status = HAL_SPI_TransmitReceive(dev->hspi, tx, rx, 4U, timeout_ms);
+    AD7682_DelayUs(10U);
+    if (status != HAL_OK)
     {
-        __NOP();
+        return status == HAL_TIMEOUT ? AD7682_TIMEOUT : AD7682_ERROR;
     }
+    *raw = (uint16_t)(((uint16_t)rx[0] << 8) | rx[1]);
+    *readback = (uint16_t)((((uint16_t)rx[2] << 8) | rx[3]) >> 2);
+    return AD7682_OK;
 }
 
 AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
                           float vref_volts)
 {
-    /* 保存 SPI、CNV 和参考电压参数，后续读取函数复用该配置。 */
-    if ((dev == NULL) || (hspi == NULL) || (vref_volts <= 0.0f))
+    uint16_t discarded_code;
+    if (dev == NULL || hspi == NULL || !(vref_volts > 0.0f))
     {
         return AD7682_ERROR;
     }
-
     dev->hspi = hspi;
     dev->cnv_port = AD7682_CNV_GPIO_Port;
     dev->cnv_pin = AD7682_CNV_Pin;
     dev->vref_volts = vref_volts;
     HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
+    HAL_Delay(10U);
+    /* First conversion also establishes the initial CFG pipeline state. */
+    return AD7682_ReadChannel(dev, 0U, &discarded_code, 100U);
+}
+
+/* 读取指定输入。配置切换后前两次结果属于流水线旧配置，第三次有效。 */
+AD7682_Status AD7682_ReadChannel(AD7682_Handle *dev, uint8_t channel,
+                                 uint16_t *code, uint32_t timeout_ms)
+{
+    uint16_t raw = 0U, readback = 0U;
+    uint16_t cfg;
+    uint8_t i;
+    AD7682_Status status;
+    if (dev == NULL || dev->hspi == NULL || code == NULL || channel >= 4U)
+    {
+        return AD7682_ERROR;
+    }
+    cfg = (uint16_t)(AD7682_CFG_BASE | ((uint16_t)channel << 7));
+    /* CFG has a two-conversion latency. Discard two results after each
+     * channel change; only the third belongs to the requested input. */
+    for (i = 0U; i < 3U; i++)
+    {
+        status = AD7682_Transfer(dev, cfg, &raw, &readback, timeout_ms);
+        if (status != AD7682_OK) { return status; }
+    }
+    /* Some board-level SDO paths do not return CFG reliably although the
+     * conversion is valid. Keep readback for diagnostics, but use the HAL
+     * transfer result as the communication criterion. */
+    (void)readback;
+    *code = raw;
     return AD7682_OK;
 }
 
+/* 顺序扫描四路输入；只有四路均成功时才更新调用者数组。 */
+AD7682_Status AD7682_ReadFourChannels(AD7682_Handle *dev, uint16_t codes[4],
+                                      uint32_t timeout_ms)
+{
+    uint16_t values[4];
+    uint8_t i;
+    AD7682_Status status;
+    if (codes == NULL) { return AD7682_ERROR; }
+    for (i = 0U; i < 4U; i++)
+    {
+        status = AD7682_ReadChannel(dev, i, &values[i], timeout_ms);
+        if (status != AD7682_OK) { return status; }
+    }
+    for (i = 0U; i < 4U; i++) { codes[i] = values[i]; }
+    return AD7682_OK;
+}
+
+/* 兼容旧接口：读取 IN0 原始码。 */
 AD7682_Status AD7682_ReadRaw(AD7682_Handle *dev, uint16_t *code,
                              uint32_t timeout_ms)
 {
-    /* CNV 高脉冲启动一次转换，等待转换完成后读取两个字节。 */
-    uint8_t rx[2] = {0U, 0U};
-    HAL_StatusTypeDef hal_status;
-
-    if ((dev == NULL) || (code == NULL) || (dev->hspi == NULL))
-    {
-        return AD7682_ERROR;
-    }
-
-    HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_SET);
-    /* tCNVH is 10 ns; 1 us is a safe GPIO pulse at this abstraction level. */
-    AD7682_DelayUs(1U);
-    /* tCONV is 2.2 us maximum at the documented operating conditions. */
-    AD7682_DelayUs(3U);
-    HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
-
-    hal_status = HAL_SPI_Receive(dev->hspi, rx, sizeof(rx), timeout_ms);
-    if (hal_status != HAL_OK)
-    {
-        return (hal_status == HAL_TIMEOUT) ? AD7682_TIMEOUT : AD7682_ERROR;
-    }
-
-    *code = ((uint16_t)rx[0] << 8) | rx[1];
-    return AD7682_OK;
+    return AD7682_ReadChannel(dev, 0U, code, timeout_ms);
 }
 
+/* 将 16 位单极性原始码换算为电压，满量程对应 VREF。 */
 AD7682_Status AD7682_ReadVoltage(AD7682_Handle *dev, float *voltage,
                                  uint32_t timeout_ms)
 {
-    /* 原始码按 16 位满量程和外部参考电压换算。 */
     uint16_t code;
     AD7682_Status status;
-
-    if ((dev == NULL) || (voltage == NULL))
-    {
-        return AD7682_ERROR;
-    }
-
+    if (voltage == NULL) { return AD7682_ERROR; }
     status = AD7682_ReadRaw(dev, &code, timeout_ms);
     if (status == AD7682_OK)
     {
-        *voltage = ((float)code * dev->vref_volts) / 65536.0f;
+        *voltage = (float)code * dev->vref_volts / 65536.0f;
     }
     return status;
 }

@@ -36,9 +36,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BOOT_INIT_RETRIES 3U
-#define BOOT_INIT_TIMEOUT 100U
-#define SAMPLE_PERIOD_MS 20U
+#define BOOT_INIT_RETRIES 3U       /* 外部器件上电探测次数。 */
+#define BOOT_INIT_TIMEOUT 100U     /* 单次器件访问超时，单位 ms。 */
+#define SAMPLE_PERIOD_MS 20U       /* 主循环最小节拍，目标实时输出约 50 Hz。 */
 
 /* USER CODE END Includes */
 
@@ -61,16 +61,12 @@
 
 /* USER CODE BEGIN PV */
 volatile uint8_t g_uart_rx_byte;
+volatile uint8_t g_uart_line_ready;
+volatile uint8_t g_uart_line_overflow;
+volatile uint8_t g_uart_rx_restart;
 volatile uint8_t g_rtc_setting_mode;
-/* 单生产者(USART ISR)/单消费者(主循环)，可缓存连续多条命令。 */
-#define UART_RX_RING_SIZE 512U
-static volatile uint8_t g_uart_rx_ring[UART_RX_RING_SIZE];
-static volatile uint16_t g_uart_rx_head;
-static volatile uint16_t g_uart_rx_tail;
-static volatile uint8_t g_uart_rx_fault;
 static char g_uart_line[64];
 static uint8_t g_uart_line_length;
-static uint8_t g_uart_discard_line;
 volatile uint32_t g_record_timer_seconds;
 static uint32_t g_record_last_second;
 static uint32_t g_dump_remaining;
@@ -80,20 +76,22 @@ static float g_sht_filtered_temperature;
 static float g_sht_filtered_humidity;
 static uint8_t g_sht_filter_valid;
 static uint32_t g_sht_last_valid_tick;
+static AD7682_Handle g_ad7682;
+static AD7682_Status g_adc_status = AD7682_ERROR;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-static void Debug_Print(const char *text);
-static void Debug_BootInitializeDevices(void);
-static void Debug_SendSamples(void);
-static void SimulatedAdc_Read(uint16_t adc[4]);
+static void Serial_Write(const char *text);
+static void Devices_Initialize(void);
+static void Samples_ProcessAndOutput(void);
 static void Serial_DumpLogs(void);
 static void RecordTimer_Init(void);
 static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
+static void Serial_RecoverReceive(void);
 static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity);
@@ -139,10 +137,16 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1);
-  Debug_BootInitializeDevices();
+  Devices_Initialize();
   (void)DataLogger_Init(&hspi2, BOOT_INIT_TIMEOUT);
   RecordTimer_Init();
+  /* 启动阶段的串口输出完成后再开启命令接收。清理 RX 残留和错误状态，
+     确保复位后的第一条命令从完整的空闲接收状态开始。 */
+  __HAL_UART_CLEAR_FLAG(&huart1, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                  UART_CLEAR_PEF | UART_CLEAR_FEF);
+  __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
+  huart1.ErrorCode = HAL_UART_ERROR_NONE;
+  (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
 
   /* USER CODE END 2 */
 
@@ -152,7 +156,7 @@ int main(void)
   {
     Serial_ProcessCommand();
     /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
-    Debug_SendSamples();
+    Samples_ProcessAndOutput();
     Serial_DumpLogs();
     Serial_ServiceDelay(SAMPLE_PERIOD_MS);
     /* USER CODE END WHILE */
@@ -210,7 +214,11 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-static void Debug_Print(const char *text){HAL_UART_Transmit(&huart1,(uint8_t *)text,(uint16_t)strlen(text),100);}
+/* 统一的阻塞式串口发送入口；所有输出均由主循环调用。 */
+static void Serial_Write(const char *text)
+{
+  HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), 100U);
+}
 
 /* TIM14 内部时钟，无外部引脚。APB 分频为 1 时 TIMCLK=PCLK，
  * 否则 TIMCLK=2*PCLK；分频至 10 kHz，再每 10000 拍产生一次中断。
@@ -239,9 +247,9 @@ static void RecordTimer_Init(void)
  *
  * MX_* 外设初始化由 CubeMX 生成，失败时会进入 Error_Handler；这里对
  * 外部器件增加有限重试，避免器件电源/复位释放稍慢时第一次访问失败。
- * 重试只执行无副作用的探测/配置，不在这里重复 Flash 擦除测试。
+ * 重试只执行无副作用的探测/配置，不重复执行 Flash 擦除。
  */
-static void Debug_BootInitializeDevices(void)
+static void Devices_Initialize(void)
 {
   uint8_t retry;
   uint8_t id[3] = {0U};
@@ -250,6 +258,15 @@ static void Debug_BootInitializeDevices(void)
   float humidity = 0.0f;
   PCF8563_DateTime datetime = {0};
   HAL_StatusTypeDef status;
+
+  for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+  {
+    g_adc_status = AD7682_Init(&g_ad7682, &hspi1, 2.5f);
+    if (g_adc_status == AD7682_OK) { break; }
+    HAL_Delay(10U);
+  }
+  Serial_Write(g_adc_status == AD7682_OK ? "AD7682 INIT OK\r\n" :
+                                        "AD7682 INIT ERROR\r\n");
 
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
@@ -348,15 +365,25 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
   {
-    uint16_t next = (uint16_t)((g_uart_rx_head + 1U) % UART_RX_RING_SIZE);
-    if (next != g_uart_rx_tail)
+    if (g_uart_rx_byte == '\r' || g_uart_rx_byte == '\n')
     {
-      g_uart_rx_ring[g_uart_rx_head] = g_uart_rx_byte;
-      g_uart_rx_head = next;
+      if (g_uart_line_ready == 0U)
+      {
+        g_uart_line[g_uart_line_length] = 0;
+        g_uart_line_ready = 1U;
+      }
+      g_uart_line_length = 0U;
     }
-    else
+    else if (g_uart_line_ready == 0U)
     {
-      g_uart_rx_fault = 1U;
+      if (g_uart_line_length < (sizeof(g_uart_line) - 1U))
+      {
+        g_uart_line[g_uart_line_length++] = (char)g_uart_rx_byte;
+      }
+      else
+      {
+        g_uart_line_overflow = 1U;
+      }
     }
     (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
   }
@@ -366,67 +393,35 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
   {
-    /* HAL 在 ORE 等错误后终止 RX；只恢复 RX，不能中止正在进行的 TX。
-       丢弃不完整命令，避免损坏的数据执行 log clear 等操作。 */
-    g_uart_rx_fault = 1U;
-    (void)HAL_UART_AbortReceive(huart);
-    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
-                               UART_CLEAR_PEF | UART_CLEAR_FEF);
-    (void)HAL_UART_Receive_IT(huart, (uint8_t *)&g_uart_rx_byte, 1U);
+    /* 只置位标志；HAL 状态恢复放到主循环，避免在 UART ISR 内重入 HAL。 */
+    g_uart_rx_restart = 1U;
   }
 }
 
-static uint8_t Serial_ReadLine(char command[64])
+static void Serial_RecoverReceive(void)
 {
-  while (g_uart_rx_tail != g_uart_rx_head || g_uart_rx_fault != 0U)
+  uint32_t primask;
+
+  if (g_uart_rx_restart == 0U)
   {
-    uint8_t byte;
-    uint8_t available;
-    uint32_t primask = __get_PRIMASK();
-    /* 短临界区：出错时原子清空旧数据并重新同步到下一个换行。 */
-    __disable_irq();
-    if (g_uart_rx_fault != 0U)
-    {
-      g_uart_rx_tail = g_uart_rx_head;
-      g_uart_rx_fault = 0U;
-      g_uart_line_length = 0U;
-      g_uart_discard_line = 1U;
-    }
-    available = (g_uart_rx_tail != g_uart_rx_head);
-    byte = available ? g_uart_rx_ring[g_uart_rx_tail] : 0U;
-    if (available)
-    {
-      g_uart_rx_tail = (uint16_t)((g_uart_rx_tail + 1U) % UART_RX_RING_SIZE);
-    }
-    __set_PRIMASK(primask);
-    if (!available) { return 0U; }
-    if (byte == '\r' || byte == '\n')
-    {
-      if (g_uart_discard_line)
-      {
-        g_uart_discard_line = 0U;
-        g_uart_line_length = 0U;
-        continue;
-      }
-      /* CRLF 的第二个字符及空行不产生待处理命令。 */
-      if (g_uart_line_length == 0U) { continue; }
-      g_uart_line[g_uart_line_length] = 0;
-      memcpy(command, g_uart_line, (size_t)g_uart_line_length + 1U);
-      g_uart_line_length = 0U;
-      return 1U;
-    }
-    if (g_uart_discard_line) { continue; }
-    if (g_uart_line_length < sizeof(g_uart_line) - 1U)
-    {
-      g_uart_line[g_uart_line_length++] = (char)byte;
-    }
-    else
-    {
-      g_uart_discard_line = 1U;
-      g_uart_line_length = 0U;
-    }
+    return;
   }
-  return 0U;
+  primask = __get_PRIMASK();
+  __disable_irq();
+  if (g_uart_rx_restart != 0U)
+  {
+    (void)HAL_UART_AbortReceive(&huart1);
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                    UART_CLEAR_PEF | UART_CLEAR_FEF);
+    __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
+    huart1.ErrorCode = HAL_UART_ERROR_NONE;
+    g_uart_line_length = 0U;
+    g_uart_line_ready = 0U;
+    g_uart_line_overflow = 0U;
+    g_uart_rx_restart = 0U;
+    (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
+  }
+  __set_PRIMASK(primask);
 }
 
 static uint8_t Serial_IsSpace(char c){return (uint8_t)(c==' '||c=='\t'||c=='\r'||c=='\n');}
@@ -449,25 +444,38 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
   dt->year=yy;dt->month=mo;dt->day=da;dt->hours=hh;dt->minutes=mi;dt->seconds=se;dt->weekday=Serial_Weekday(year,mo,da);dt->century=0U;return 1;
 }
 
-static void Serial_PrintSettingHelp(void){Debug_Print("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
+/* setting 模式下只处理配置和日志命令；实时采样不会被暂停。 */
+static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
-  if(!Serial_ParseSetTime(command,&requested)){Debug_Print("RTC SET ERROR: use SET YY-MM-DD HH:MM:SS\r\n");return;}
+  if(!Serial_ParseSetTime(command,&requested)){Serial_Write("RTC SET ERROR: use SET YY-MM-DD HH:MM:SS\r\n");return;}
   s=PCF8563_WriteDateTime(&hi2c1,&requested,100);if(s==HAL_OK)s=PCF8563_SetRunning(&hi2c1,1U,100);
-  if(s!=HAL_OK){(void)snprintf(line,sizeof(line),"RTC SET ERROR: status=%d\r\n",(int)s);Debug_Print(line);return;}
+  if(s!=HAL_OK){(void)snprintf(line,sizeof(line),"RTC SET ERROR: status=%d\r\n",(int)s);Serial_Write(line);return;}
   s=PCF8563_GetVoltageLow(&hi2c1,&vl,100);if(s==HAL_OK)s=PCF8563_ReadDateTime(&hi2c1,&actual,100);
-  if(s!=HAL_OK){(void)snprintf(line,sizeof(line),"RTC SET VERIFY ERROR: status=%d\r\n",(int)s);Debug_Print(line);return;}
-  (void)snprintf(line,sizeof(line),"RTC SET OK: 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",actual.year,actual.month,actual.day,actual.hours,actual.minutes,actual.seconds,vl);Debug_Print(line);
+  if(s!=HAL_OK){(void)snprintf(line,sizeof(line),"RTC SET VERIFY ERROR: status=%d\r\n",(int)s);Serial_Write(line);return;}
+  (void)snprintf(line,sizeof(line),"RTC SET OK: 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",actual.year,actual.month,actual.day,actual.hours,actual.minutes,actual.seconds,vl);Serial_Write(line);
 }
 
 static void Serial_ProcessCommand(void)
 {
-  char command[64];char *trimmed;
-  if(!Serial_ReadLine(command))return;
+  char command[64];char *trimmed;uint8_t overflow;
+  if(!g_uart_line_ready)
+  {
+    Serial_RecoverReceive();
+    if(!g_uart_line_ready)return;
+  }
+  __disable_irq();
+  memcpy(command,g_uart_line,sizeof(command));
+  overflow=g_uart_line_overflow;
+  g_uart_line_ready=0U;
+  __enable_irq();
+  command[sizeof(command)-1U]=0;
+  g_uart_line_overflow=0U;
+  if(overflow){Serial_Write("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
-  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Debug_Print("EXIT SETTING MODE\r\n");}return;}
+  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
   {
     if(Serial_Equals(trimmed,"log dump"))
@@ -485,7 +493,7 @@ static void Serial_ProcessCommand(void)
                      (unsigned long)DataLogger_Capacity(),
                      (unsigned long)DataLogger_GetInterval(),
                      DataLogger_GetDumpNewestFirst() ? "newest-first" : "oldest-first");
-      Debug_Print(line);
+      Serial_Write(line);
     }
     else if(strncmp(trimmed,"log interval ",13U)==0)
     {
@@ -494,27 +502,27 @@ static void Serial_ProcessCommand(void)
          DataLogger_SetInterval(seconds,3000U)==HAL_OK)
       {
         g_record_last_second = g_record_timer_seconds;
-        Debug_Print("LOG INTERVAL OK\r\n");
+        Serial_Write("LOG INTERVAL OK\r\n");
       }
       else
       {
-        Debug_Print("LOG INTERVAL ERROR: use log interval 1..86400\r\n");
+        Serial_Write("LOG INTERVAL ERROR: use log interval 1..86400\r\n");
       }
     }
     else if(Serial_Equals(trimmed,"log order old") || Serial_Equals(trimmed,"log order oldest"))
     {
-      Debug_Print(DataLogger_SetDumpNewestFirst(0U,3000U)==HAL_OK ?
+      Serial_Write(DataLogger_SetDumpNewestFirst(0U,3000U)==HAL_OK ?
                   "LOG ORDER OK: oldest-first\r\n" : "LOG ORDER ERROR\r\n");
     }
     else if(Serial_Equals(trimmed,"log order new") || Serial_Equals(trimmed,"log order newest"))
     {
-      Debug_Print(DataLogger_SetDumpNewestFirst(1U,3000U)==HAL_OK ?
+      Serial_Write(DataLogger_SetDumpNewestFirst(1U,3000U)==HAL_OK ?
                   "LOG ORDER OK: newest-first\r\n" : "LOG ORDER ERROR\r\n");
     }
     else if(Serial_Equals(trimmed,"log clear"))
     {
       g_dump_remaining = 0U;
-      Debug_Print(DataLogger_Clear(3000U)==HAL_OK ?
+      Serial_Write(DataLogger_Clear(3000U)==HAL_OK ?
                   "LOG CLEAR OK\r\n" : "LOG CLEAR ERROR\r\n");
     }
     else if(strlen(trimmed)>=3U && Serial_ToLower(trimmed[0])=='s' &&
@@ -524,13 +532,15 @@ static void Serial_ProcessCommand(void)
     }
     else
     {
-      Debug_Print("Unknown setting command\r\n");
+      Serial_Write("Unknown setting command\r\n");
     }
   }
 }
 
+/* 将延时拆成小段，确保 UART 接收中断和命令解析持续运行。 */
 static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
 
+/* 每次只发送一条历史记录，避免导出过程长时间阻塞采样。 */
 static void Serial_DumpLogs(void)
 {
   uint16_t year;
@@ -559,24 +569,17 @@ static void Serial_DumpLogs(void)
                    (double)sample.pressure_u7_hpa, (double)sample.pressure_u11_hpa,
                    (unsigned)sample.adc[0], (unsigned)sample.adc[1],
                    (unsigned)sample.adc[2], (unsigned)sample.adc[3]);
-    Debug_Print(line);
+    Serial_Write(line);
   }
 }
 
-static void SimulatedAdc_Read(uint16_t adc[4])
-{
-  adc[0] = 1000U;
-  adc[1] = 2000U;
-  adc[2] = 3000U;
-  adc[3] = 4000U;
-}
-
+/* 三点中值滤波：抑制 SHT41 偶发的孤立异常值。 */
 static float Median3(float a, float b, float c)
 {
   float swap;
   if (a > b) { swap = a; a = b; b = swap; }
-  if (b > c) { b = c; c = b; b = swap; }
-  if (a > b) { b = a; }
+  if (b > c) { swap = b; b = c; c = swap; }
+  if (a > b) { swap = a; a = b; b = swap; }
   return b;
 }
 
@@ -609,8 +612,9 @@ static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float 
 }
 
 /* FireWater 数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
- * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 模拟 ADC。 */
-static void Debug_SendSamples(void)
+ * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 AD7682 IN0..3。 */
+/* 读取一轮所有传感器，按记录周期写 Flash，并按实时格式输出。 */
+static void Samples_ProcessAndOutput(void)
 {
   uint32_t battery_raw;
   uint32_t now;
@@ -624,6 +628,7 @@ static void Debug_SendSamples(void)
   float u11_pressure = 0.0f;
   float u11_temperature = 0.0f;
   char line[128];
+  char adc_text[40];
   DataLogger_Sample log_sample;
   HAL_StatusTypeDef sht_status;
 
@@ -646,13 +651,23 @@ static void Debug_SendSamples(void)
     u11_pressure = 0.0f;
     u11_temperature = 0.0f;
   }
-  SimulatedAdc_Read(adc);
+  /* Each scan rewrites CFG, allowing recovery from a transient SPI fault
+   * without reboot. Invalid ADC data is never written to the history log. */
+  g_adc_status = AD7682_ReadFourChannels(&g_ad7682, adc, 10U);
+  if (g_adc_status == AD7682_OK)
+  {
+    (void)snprintf(adc_text, sizeof(adc_text), "%u,%u,%u,%u",
+                   (unsigned)adc[0], (unsigned)adc[1],
+                   (unsigned)adc[2], (unsigned)adc[3]);
+  }
+  else { (void)snprintf(adc_text, sizeof(adc_text), "nan,nan,nan,nan"); }
 
   now = g_record_timer_seconds;
   interval = DataLogger_GetInterval();
   if ((now - g_record_last_second) >= interval)
   {
-    if (g_sht_filter_valid && (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U &&
+    if (g_adc_status == AD7682_OK && g_sht_filter_valid &&
+        (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U &&
         PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
     {
       log_sample.temperature_c = sht_temperature;
@@ -665,7 +680,7 @@ static void Debug_SendSamples(void)
       log_sample.adc[3] = adc[3];
       if (DataLogger_Append(&log_sample, 3000U) != HAL_OK)
       {
-        if (g_rtc_setting_mode) { Debug_Print("LOG WRITE ERROR\r\n"); }
+        if (g_rtc_setting_mode) { Serial_Write("LOG WRITE ERROR\r\n"); }
       }
     }
     /* 按原定时基准推进，不把采样/写入耗时累计进记录周期。
@@ -675,17 +690,17 @@ static void Debug_SendSamples(void)
 
   /* 采样或 Flash 写入期间到达的命令，在下一行实时输出前处理。 */
   Serial_ProcessCommand();
-  if (g_rtc_setting_mode != 0U || !g_sht_filter_valid)
+  if (g_rtc_setting_mode != 0U)
   {
     return;
   }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
+  if (!g_sht_filter_valid) { return; }
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
                  (double)u7_temperature, (double)u11_pressure,
-                 (double)u11_temperature, (unsigned)adc[0],
-                 (unsigned)adc[1], (unsigned)adc[2], (unsigned)adc[3]);
-  Debug_Print(line);
+                 (double)u11_temperature, adc_text);
+  Serial_Write(line);
 }
 
 /* USER CODE END 4 */
