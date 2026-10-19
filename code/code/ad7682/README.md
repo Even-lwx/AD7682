@@ -1,84 +1,71 @@
-# AD7682 driver
+# AD7682 驱动说明
 
-This driver targets the AD7682 connection in the project schematic:
+本驱动对应工程原理图中的 AD7682（U5）。
 
-- SPI1 SCK: PA1 (`SCK`)
-- SPI1 SDO: PA6 (`SDO`)
-- SPI1 DIN: PA7 (`DIN`)
-- Conversion start (`CNV`): PA5
+## 原理图连接
 
-Board source: `pcb/AD7682-Ver1.0/Sheet1.SchDoc`, U5. CNV/DIN/SCK/SDO
-are pins 11/12/13/14. IN0/1/2/3 are pins 16/18/7/9; COM is grounded.
-VDD/VIO use 3V. REF uses external `2V5_SENSOR` (REF3025) through 0 ohms;
-the firmware therefore disables the internal reference and reference buffer.
+- SPI1 SCK：PA1（SCK）
+- SPI1 SDO：PA6（SDO）
+- SPI1 DIN：PA7（DIN）
+- 转换启动 CNV：PA5
 
-## Configuration and protocol
+原理图文件为 `pcb/AD7682-Ver1.0/Sheet1.SchDoc`。AD7682 的 CNV、DIN、SCK、SDO
+分别为芯片 11、12、13、14 脚；IN0、IN1、IN2、IN3 分别为 16、18、7、9 脚；COM
+接地。VDD/VIO 为 3 V，REF 通过 0 Ω 电阻连接外部 `2V5_SENSOR`（REF3025），因此
+固件关闭内部参考源和内部参考缓冲器。
 
-Source: `doc/C398823_模数转换芯片ADC_AD7682BCPZ_规格书_WJ214604.PDF`,
-Rev. B, pp.7,19,21,23-25,28. The PDF's extracted Chinese text has damaged
-font mappings; bit fields and timing labels remain readable.
+## 配置和通信协议
 
-The chip has a 14-bit CFG word (not an I2C-style addressed register map).
-Base CFG is `0x3C70`, plus `channel << 7`:
+依据 `doc/C398823_模数转换芯片ADC_AD7682BCPZ_规格书_WJ214604.PDF` Rev. B
+第 7、19、21、23～25、28 页。CFG 是 14 位配置字，并非 I2C 那种带地址的寄存器。
+基础配置值为 `0x3C70`，通道选择值为 `channel << 7`：
 
-| Field | Setting | Meaning |
+| 字段 | 配置值 | 含义 |
 | --- | --- | --- |
-| CFG[13] | 1 | Update configuration |
-| INCC[12:10] | 111 | Unipolar single-ended input relative to GND |
-| INx[9:7] | 000..011 | IN0..IN3 |
-| BW[6] | 1 | Full bandwidth |
-| REF[5:3] | 110 | External REF, internal reference/buffer disabled |
-| SEQ[2:1] | 00 | Sequencer disabled, explicit channel selection |
-| RB[0] | 0 | Configuration readback enabled |
+| CFG[13] | 1 | 更新配置 |
+| INCC[12:10] | 111 | 相对于 GND 的单端单极性输入 |
+| INx[9:7] | 000～011 | 选择 IN0～IN3 |
+| BW[6] | 1 | 全带宽 |
+| REF[5:3] | 110 | 使用外部 REF，关闭内部参考和缓冲器 |
+| SEQ[2:1] | 00 | 关闭通道序列器，使用显式通道选择 |
+| RB[0] | 0 | 开启配置回读 |
 
-SPI1 uses mode 0, MSB first, 8-bit transfers, 2 MHz (64 MHz / 32).
-Each transaction raises CNV, waits conservatively beyond the 3.2 us maximum
-conversion time, then lowers CNV and exchanges four bytes. CFG is sent
-MSB-aligned (`CFG << 2`). Receive data is 16 conversion bits followed by
-14 CFG bits; the two trailing high-Z bits are ignored. CNV stays low
-between transactions to guarantee a rising edge for the next conversion.
-The implementation waits 10 us with CNV high and 5 us after CNV falls,
-providing margin for both conversion and acquisition.
+SPI1 使用模式 0、MSB 先传、8 位数据、2 MHz 时钟（64 MHz ÷ 32）。每次事务先将
+CNV 拉高并等待转换完成，再拉低 CNV 后交换 4 字节。CFG 按 MSB 对齐方式发送，发送
+值为 `CFG << 2`。接收数据前 16 位为转换结果，后 14 位为 CFG 回读，末尾两位为高阻
+状态并忽略。每次事务结束后 CNV 保持低电平，确保下一次调用产生有效上升沿。
 
-Every channel read discards two conversions to flush the CFG latency and
-returns the third. CFG readback is clocked for diagnostics but is not used
-to reject an otherwise successful SPI conversion. A full four-channel
-read performs 12 conversions, updating the caller's array only on complete
-success. `AD7682_ReadRaw` / `AD7682_ReadVoltage` retain IN0 compatibility.
-`timeout_ms` applies to each HAL SPI call, not the entire scan. These
-blocking functions must not be called concurrently or from an ISR.
+当前配置在 CNV 拉低后额外等待 100 µs；对于 100 Ω + 100 pF 的输入网络，
+该时间仍远大于 RC 建立时间和数据手册规定的 1.8 µs 最小采集时间。CFG 具有一拍
+流水线延迟，因此每次切换通道后先执行一次丢弃转换，再连续读取 4 个有效结果。
+四个有效结果按排序后中间两个的平均值作为该通道输出，抑制单次尖峰，同时保留
+多次采样带来的精度。
 
-## Application behavior
+## 应用行为
 
-- Startup initialization retries up to three times and reports `AD7682 INIT OK/ERROR`.
-- Each normal sampling cycle reads real IN0..IN3. Real-time ch7..ch10 and
-  the four history ADC fields retain unsigned 16-bit raw codes (0..65535).
-- Communication failure
-  prints `nan,nan,nan,nan` and skips that cycle's scheduled history record.
-  Other sampling, command handling and dump continue. Later successful
-  scans recover automatically. With the ADC missing, new history is not saved.
-- Sampling and scheduled logging continue in `setting` mode.
-- Existing history and its binary layout are unchanged.
-- Conversion to volts: `code * measured_REF / 65536`; nominal REF is 2.5 V.
+- 上电初始化最多重试 3 次，并输出 `AD7682 INIT OK` 或 `AD7682 INIT ERROR`。
+- 每轮按 IN0、IN1、IN2、IN3 顺序扫描四个通道；每个通道为“1 次丢弃转换 + 4 次
+  有效转换”，实时串口和历史记录输出四个通道的中值结果。
+- 单次有效转换失败时，本轮四个 ADC 字段统一输出 `65535`，避免把未完成扫描的
+  部分结果误当成同一时刻的数据。
+- SPI 通信失败时 ADC 字段输出 `65535`，其他传感器采样、命令处理和日志导出继续运行；
+  通信恢复后自动恢复正常采样。
+- `setting` 状态下仍继续采样和按周期记录，只暂停实时数据行输出。
+- 电压换算公式为 `code × measured_REF / 65536`，当前参考电压标称值为 2.5 V。
 
-The existing main loop still waits 20 ms **after** sampling/output, so its
-actual output rate is below 50 Hz and depends on peripheral/serial delays.
-This driver does not change that scheduling policy.
+主循环在采样和输出结束后还会等待 20 ms，因此实际串口频率会受到传感器通信、ADC
+采样和串口发送长度影响，不能仅按 50 Hz 理论值计算。
 
-## Hardware acceptance (not yet performed)
+## 上板验证步骤
 
-1. Verify U5 VDD/VIO and REF (nominal 3 V/2.5 V), and common ground.
-2. Boot and check the `AD7682 INIT OK` startup status.
-3. Connect each input to GND, then a known voltage below REF. At 1.25 V
-   and REF=2.5 V expect approximately 32768; drive one input at a time
-   to check ordering and absence of stale-channel results. Do not exceed REF.
-4. Use `log interval 1` and `log dump` to compare the four stored codes;
-   check restart persistence without clearing existing logs.
-5. Disconnect SDO or remove U5 power safely, verify error/NaN and no new
-   invalid history. Restore wiring and verify automatic recovery.
-6. Check CNV/SCK/DIN/SDO on a logic analyzer: 32 clocks per conversion,
-   correct configuration, 12 conversions per scan, mode 0.
+1. 测量 U5 的 VDD/VIO、REF，并确认 MCU 与 ADC 共地，标称值分别为 3 V 和 2.5 V。
+2. 上电后确认串口输出 `AD7682 INIT OK`。
+3. 先将每个输入接 GND，再接入低于 REF 的已知电压。REF=2.5 V、输入 1.25 V 时，
+   原始码应约为 32768。逐路接入以确认通道顺序，输入电压不得超过 REF。
+4. 使用 `log interval 1` 和 `log dump` 检查历史记录中的 ADC 顺序和数值。
+5. 安全断开 SDO 或 U5 电源，确认 ADC 字段变为 65535；恢复接线后应自动恢复采样。
+6. 使用逻辑分析仪检查 CNV、SCK、DIN、SDO：每次转换 32 个时钟、模式 0、每轮扫描
+   每通道 1 次丢弃转换加 4 次有效转换。
 
-CFG readback detects many digital-link errors (including constant zero/one
-SDO), but is not a chip ID or an analog self-test. It cannot establish REF
-accuracy, analog power integrity, input wiring, or resistance to noise.
+CFG 回读可以发现部分数字链路故障（例如 SDO 恒为 0 或 1），但它不是芯片 ID，也不是
+模拟输入自检，不能单独证明 REF 精度、模拟电源完整性、输入接线或抗干扰性能。

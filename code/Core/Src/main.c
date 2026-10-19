@@ -2,28 +2,27 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : 主程序主体。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "main.h"
 #include "adc.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
-/* Private includes ----------------------------------------------------------*/
+/* 私有头文件包含。 */
 /* USER CODE BEGIN Includes */
 #include "i2c.h"
 #include "ad7682.h"
@@ -38,26 +37,35 @@
 
 #define BOOT_INIT_RETRIES 3U       /* 外部器件上电探测次数。 */
 #define BOOT_INIT_TIMEOUT 100U     /* 单次器件访问超时，单位 ms。 */
-#define SAMPLE_PERIOD_MS 20U       /* 主循环最小节拍，目标实时输出约 50 Hz。 */
+#define SENSOR_INVALID_FLOAT (-9999.0f)
+#define SENSOR_INVALID_ADC   0xFFFFU
+#define PRESSURE_AVG_WINDOW  50U
 
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
+/* 私有类型定义。 */
 /* USER CODE BEGIN PTD */
+typedef struct
+{
+  float values[PRESSURE_AVG_WINDOW];
+  float sum;
+  uint16_t count;
+  uint16_t next;
+} PressureAverage;
 
 /* USER CODE END PTD */
 
-/* Private define ------------------------------------------------------------*/
+/* 私有宏定义。 */
 /* USER CODE BEGIN PD */
 
 /* USER CODE END PD */
 
-/* Private macro -------------------------------------------------------------*/
+/* 私有宏。 */
 /* USER CODE BEGIN PM */
 
 /* USER CODE END PM */
 
-/* Private variables ---------------------------------------------------------*/
+/* 私有变量。 */
 
 /* USER CODE BEGIN PV */
 volatile uint8_t g_uart_rx_byte;
@@ -68,6 +76,9 @@ volatile uint8_t g_rtc_setting_mode;
 static char g_uart_line[64];
 static uint8_t g_uart_line_length;
 volatile uint32_t g_record_timer_seconds;
+volatile uint16_t g_sensor_timer_milliseconds;
+volatile uint16_t g_sensor_sample_elapsed_ms;
+volatile uint8_t g_sensor_sample_request;
 static uint32_t g_record_last_second;
 static uint32_t g_dump_remaining;
 static uint32_t g_dump_sequence;
@@ -78,10 +89,13 @@ static uint8_t g_sht_filter_valid;
 static uint32_t g_sht_last_valid_tick;
 static AD7682_Handle g_ad7682;
 static AD7682_Status g_adc_status = AD7682_ERROR;
+static uint8_t g_w25q_ready;
+static PressureAverage g_u7_pressure_average;
+static PressureAverage g_u11_pressure_average;
 
 /* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
+/* 私有函数声明。 */
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void Serial_Write(const char *text);
@@ -89,23 +103,25 @@ static void Devices_Initialize(void);
 static void Samples_ProcessAndOutput(void);
 static void Serial_DumpLogs(void);
 static void RecordTimer_Init(void);
+static uint8_t SensorSample_ConsumeRequest(void);
 static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_RecoverReceive(void);
-static void Serial_ServiceDelay(uint32_t delay_ms);
 static void BatteryLed_Update(float voltage);
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity);
+static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa);
+static uint8_t Pressure_IsValid(float pressure_hpa);
 
 /* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
+/* 私有用户代码。 */
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
+  * @brief  应用程序入口。
+  * @retval int 返回状态。
   */
 int main(void)
 {
@@ -113,23 +129,23 @@ int main(void)
 
   /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+  /* MCU 配置。 */
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* 复位所有外设，并初始化 Flash 接口和系统滴答定时器。 */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
 
-  /* Configure the system clock */
+  /* 配置系统时钟。 */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
+  /* 初始化所有已配置的外设。 */
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
@@ -150,15 +166,18 @@ int main(void)
 
   /* USER CODE END 2 */
 
-  /* Infinite loop */
+  /* 无限循环。 */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     Serial_ProcessCommand();
-    /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
-    Samples_ProcessAndOutput();
+    /* 由 TIM14 周期中断触发采样；耗时的 I2C/SPI 事务不在中断中执行。 */
+    if (SensorSample_ConsumeRequest() != 0U)
+    {
+      /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
+      Samples_ProcessAndOutput();
+    }
     Serial_DumpLogs();
-    Serial_ServiceDelay(SAMPLE_PERIOD_MS);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -167,20 +186,19 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
+  * @brief 配置系统时钟。
+  * @retval 无
   */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
+  /** 配置内部稳压器的主输出电压。
   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
+  /** 根据 RCC_OscInitTypeDef 结构体中的参数初始化 RCC 振荡器。
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -198,7 +216,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
+  /** 初始化 CPU、AHB 和 APB 总线时钟。
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
@@ -221,8 +239,9 @@ static void Serial_Write(const char *text)
 }
 
 /* TIM14 内部时钟，无外部引脚。APB 分频为 1 时 TIMCLK=PCLK，
- * 否则 TIMCLK=2*PCLK；分频至 10 kHz，再每 10000 拍产生一次中断。
- * 直接使用 CMSIS 寄存器，不依赖未启用的 HAL TIM 模块。 */
+ * 否则 TIMCLK=2*PCLK；分频至 10 kHz，每 10 个计数产生一次 1 ms
+ * 中断。中断同时维护记录秒计数，并按 SENSOR_SAMPLE_PERIOD_MS 置位
+ * 采样请求。I2C/SPI 和串口发送全部留在主循环，避免在 ISR 中阻塞。 */
 static void RecordTimer_Init(void)
 {
   uint32_t clock = HAL_RCC_GetPCLK1Freq();
@@ -230,16 +249,34 @@ static void RecordTimer_Init(void)
   __HAL_RCC_TIM14_CLK_ENABLE();
   TIM14->CR1 = 0U;
   TIM14->PSC = clock / 10000U - 1U;
-  TIM14->ARR = 9999U;
+  TIM14->ARR = 9U;
   TIM14->EGR = TIM_EGR_UG;
   TIM14->SR = 0U;
   g_record_timer_seconds = 0U;
+  g_sensor_timer_milliseconds = 0U;
+  g_sensor_sample_elapsed_ms = 0U;
+  g_sensor_sample_request = 0U;
   g_record_last_second = 0U;
   TIM14->DIER = TIM_DIER_UIE;
   HAL_NVIC_SetPriority(TIM14_IRQn, 2U, 0U);
   HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
   HAL_NVIC_EnableIRQ(TIM14_IRQn);
   TIM14->CR1 = TIM_CR1_CEN;
+}
+
+/* 原子地取出一次定时器产生的采样请求。若一次采集超过周期，
+ * 多个周期会合并为一个请求，避免采集完成后出现突发追赶。 */
+static uint8_t SensorSample_ConsumeRequest(void)
+{
+  uint8_t request;
+  uint32_t primask;
+
+  primask = __get_PRIMASK();
+  __disable_irq();
+  request = g_sensor_sample_request;
+  g_sensor_sample_request = 0U;
+  __set_PRIMASK(primask);
+  return request;
 }
 
 /*
@@ -258,6 +295,11 @@ static void Devices_Initialize(void)
   float humidity = 0.0f;
   PCF8563_DateTime datetime = {0};
   HAL_StatusTypeDef status;
+  uint8_t sht_ok = 0U;
+  uint8_t rtc_ok = 0U;
+  uint8_t flash_ok = 0U;
+  uint8_t lps_u7_ok = 0U;
+  uint8_t lps_u11_ok = 0U;
 
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -267,7 +309,9 @@ static void Devices_Initialize(void)
   }
   Serial_Write(g_adc_status == AD7682_OK ? "AD7682 INIT OK\r\n" :
                                         "AD7682 INIT ERROR\r\n");
+  Serial_Write("AD7682 MULTI: 4CH, DUMMY+4 VALID, MEDIAN4, ACQ=100us\r\n");
 
+  Serial_Write("SHT41 INIT...\r\n");
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -279,10 +323,12 @@ static void Devices_Initialize(void)
     }
     if (status == HAL_OK)
     {
+      sht_ok = 1U;
       break;
     }
     HAL_Delay(10U);
   }
+  Serial_Write("PCF8563 INIT...\r\n");
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
@@ -293,41 +339,54 @@ static void Devices_Initialize(void)
     }
     if (status == HAL_OK)
     {
+      rtc_ok = 1U;
       break;
     }
     HAL_Delay(10U);
   }
+  Serial_Write("W25Q128 INIT...\r\n");
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
     status = W25Q128_ReadJedec(&hspi2, id, BOOT_INIT_TIMEOUT);
     if (status == HAL_OK && id[0] == 0xEFU && id[1] == 0x40U && id[2] == 0x18U)
     {
+      flash_ok = 1U;
       break;
     }
     status = HAL_ERROR;
     HAL_Delay(10U);
   }
+  Serial_Write("LPS22HH U7 INIT...\r\n");
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
     status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u7, BOOT_INIT_TIMEOUT);
     if (status == HAL_OK)
     {
+      lps_u7_ok = 1U;
       break;
     }
     HAL_Delay(10U);
   }
+  Serial_Write("LPS22HH U11 INIT...\r\n");
   status = HAL_ERROR;
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
     status = LPS22HH_InitDevice(&hi2c1, &g_lps22hh_u11, BOOT_INIT_TIMEOUT);
     if (status == HAL_OK)
     {
+      lps_u11_ok = 1U;
       break;
     }
     HAL_Delay(10U);
   }
+  Serial_Write(sht_ok ? "SHT41 INIT OK\r\n" : "SHT41 INIT ERROR\r\n");
+  Serial_Write(rtc_ok ? "PCF8563 INIT OK\r\n" : "PCF8563 INIT ERROR\r\n");
+  Serial_Write(flash_ok ? "W25Q128 INIT OK\r\n" : "W25Q128 INIT ERROR\r\n");
+  Serial_Write(lps_u7_ok ? "LPS22HH U7 INIT OK\r\n" : "LPS22HH U7 INIT ERROR\r\n");
+  Serial_Write(lps_u11_ok ? "LPS22HH U11 INIT OK\r\n" : "LPS22HH U11 INIT ERROR\r\n");
+  g_w25q_ready = flash_ok;
 }
 
 /* PA15/LED2 电量指示：低电平点亮，高电平熄灭。 */
@@ -537,9 +596,6 @@ static void Serial_ProcessCommand(void)
   }
 }
 
-/* 将延时拆成小段，确保 UART 接收中断和命令解析持续运行。 */
-static void Serial_ServiceDelay(uint32_t delay_ms){uint32_t elapsed=0;while(elapsed<delay_ms){Serial_ProcessCommand();HAL_Delay(10);elapsed+=10U;}}
-
 /* 每次只发送一条历史记录，避免导出过程长时间阻塞采样。 */
 static void Serial_DumpLogs(void)
 {
@@ -611,77 +667,141 @@ static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float 
   g_sht_last_valid_tick = HAL_GetTick();
 }
 
-/* FireWater 数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
- * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，ch7..10 AD7682 IN0..3。 */
+/* LPS22HH 的有效气压范围约为 260~1260 hPa；这里放宽到 0~2000 hPa，
+ * 只过滤通信失败时使用的负无效值和明显异常值。无效采样不进入窗口。 */
+static uint8_t Pressure_IsValid(float pressure_hpa)
+{
+  return (uint8_t)(pressure_hpa > 0.0f && pressure_hpa < 2000.0f);
+}
+
+/* 按最近 50 个有效气压样本计算滑动平均。窗口尚未填满时，按当前有效
+ * 样本数计算；传感器暂时失败时保留最近有效平均值。 */
+static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
+{
+  if (filter == NULL) { return SENSOR_INVALID_FLOAT; }
+  if (Pressure_IsValid(pressure_hpa))
+  {
+    if (filter->count < PRESSURE_AVG_WINDOW)
+    {
+      filter->values[filter->next] = pressure_hpa;
+      filter->sum += pressure_hpa;
+      filter->count++;
+    }
+    else
+    {
+      filter->sum -= filter->values[filter->next];
+      filter->values[filter->next] = pressure_hpa;
+      filter->sum += pressure_hpa;
+    }
+    filter->next = (uint16_t)((filter->next + 1U) % PRESSURE_AVG_WINDOW);
+  }
+  if (filter->count == 0U) { return SENSOR_INVALID_FLOAT; }
+  return filter->sum / (float)filter->count;
+}
+
+/* FireWater 实时数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
+ * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，随后是 AD7682 四通道的
+ * 中值结果，最后为 U7 50 点平均、U11 50 点平均、
+ * 两路实时平均。W25Q128 中的压力字段保存 U7/U11 各自的 50 点平均值。 */
 /* 读取一轮所有传感器，按记录周期写 Flash，并按实时格式输出。 */
 static void Samples_ProcessAndOutput(void)
 {
   uint32_t battery_raw;
   uint32_t now;
   uint32_t interval;
-  uint16_t adc[4];
+  uint16_t adc[4] = {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
+                     SENSOR_INVALID_ADC, SENSOR_INVALID_ADC};
   float battery_voltage;
-  float sht_temperature = 0.0f;
-  float sht_humidity = 0.0f;
-  float u7_pressure = 0.0f;
-  float u7_temperature = 0.0f;
-  float u11_pressure = 0.0f;
-  float u11_temperature = 0.0f;
-  char line[128];
-  char adc_text[40];
+  float sht_temperature = SENSOR_INVALID_FLOAT;
+  float sht_humidity = SENSOR_INVALID_FLOAT;
+  float u7_pressure = SENSOR_INVALID_FLOAT;
+  float u7_temperature = SENSOR_INVALID_FLOAT;
+  float u11_pressure = SENSOR_INVALID_FLOAT;
+  float u11_temperature = SENSOR_INVALID_FLOAT;
+  float u7_pressure_average;
+  float u11_pressure_average;
+  float pressure_average;
+  char line[256];
+  char adc_text[128];
   DataLogger_Sample log_sample;
   HAL_StatusTypeDef sht_status;
 
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
   BatteryLed_Update(battery_voltage);
+  /* 即使上电初始化失败，也继续尝试读取；器件可能在上电后稍晚恢复。 */
   sht_status = SHT41_Read(&hi2c1, &sht_temperature, &sht_humidity, 100U);
   ShtFilter_Update(sht_status, sht_temperature, sht_humidity);
-  sht_temperature = g_sht_filtered_temperature;
-  sht_humidity = g_sht_filtered_humidity;
+  if (g_sht_filter_valid &&
+      (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U)
+  {
+    sht_temperature = g_sht_filtered_temperature;
+    sht_humidity = g_sht_filtered_humidity;
+  }
+  else
+  {
+    sht_temperature = SENSOR_INVALID_FLOAT;
+    sht_humidity = SENSOR_INVALID_FLOAT;
+  }
+  /* 不用上电初始化结果永久锁死采样，允许后续读取恢复。 */
   if (LPS22HH_ReadDevice(&hi2c1, &g_lps22hh_u7,
                          &u7_pressure, &u7_temperature, 100U) != HAL_OK)
   {
-    u7_pressure = 0.0f;
-    u7_temperature = 0.0f;
+    u7_pressure = SENSOR_INVALID_FLOAT;
+    u7_temperature = SENSOR_INVALID_FLOAT;
   }
   if (LPS22HH_ReadDevice(&hi2c1, &g_lps22hh_u11,
                          &u11_pressure, &u11_temperature, 100U) != HAL_OK)
   {
-    u11_pressure = 0.0f;
-    u11_temperature = 0.0f;
+    u11_pressure = SENSOR_INVALID_FLOAT;
+    u11_temperature = SENSOR_INVALID_FLOAT;
   }
-  /* Each scan rewrites CFG, allowing recovery from a transient SPI fault
-   * without reboot. Invalid ADC data is never written to the history log. */
+  u7_pressure_average = PressureAverage_Update(&g_u7_pressure_average,
+                                                u7_pressure);
+  u11_pressure_average = PressureAverage_Update(&g_u11_pressure_average,
+                                                 u11_pressure);
+  pressure_average = (Pressure_IsValid(u7_pressure) &&
+                      Pressure_IsValid(u11_pressure)) ?
+                     ((u7_pressure + u11_pressure) * 0.5f) :
+                     SENSOR_INVALID_FLOAT;
+  /* 多通道保守采样：切换后丢弃一次，再每通道取4次有效转换，
+     由驱动返回中间两个样本的平均值。 */
   g_adc_status = AD7682_ReadFourChannels(&g_ad7682, adc, 10U);
   if (g_adc_status == AD7682_OK)
   {
-    (void)snprintf(adc_text, sizeof(adc_text), "%u,%u,%u,%u",
-                   (unsigned)adc[0], (unsigned)adc[1],
+    (void)snprintf(adc_text, sizeof(adc_text),
+                   "%u,%u,%u,%u", (unsigned)adc[0], (unsigned)adc[1],
                    (unsigned)adc[2], (unsigned)adc[3]);
   }
-  else { (void)snprintf(adc_text, sizeof(adc_text), "nan,nan,nan,nan"); }
+  else
+  {
+    (void)snprintf(adc_text, sizeof(adc_text),
+                   "%u,%u,%u,%u",
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC);
+  }
 
   now = g_record_timer_seconds;
   interval = DataLogger_GetInterval();
   if ((now - g_record_last_second) >= interval)
   {
-    if (g_adc_status == AD7682_OK && g_sht_filter_valid &&
-        (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U &&
-        PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U) == HAL_OK)
+    (void)memset(&log_sample, 0, sizeof(log_sample));
+    (void)PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U);
+    log_sample.temperature_c = sht_temperature;
+    log_sample.humidity_rh = sht_humidity;
+    /* 历史记录保存各气压计的滑动平均值，而不是单次原始读数。
+       窗口未满时由 PressureAverage_Update() 使用已有有效样本数计算。 */
+    log_sample.pressure_u7_hpa = u7_pressure_average;
+    log_sample.pressure_u11_hpa = u11_pressure_average;
+    /* 历史记录结构每个通道只保留一个 ADC 字段，使用本轮中值结果。 */
+    log_sample.adc[0] = adc[0];
+    log_sample.adc[1] = adc[1];
+    log_sample.adc[2] = adc[2];
+    log_sample.adc[3] = adc[3];
+    if ((g_w25q_ready != 0U) &&
+        DataLogger_Append(&log_sample, 3000U) != HAL_OK)
     {
-      log_sample.temperature_c = sht_temperature;
-      log_sample.humidity_rh = sht_humidity;
-      log_sample.pressure_u7_hpa = u7_pressure;
-      log_sample.pressure_u11_hpa = u11_pressure;
-      log_sample.adc[0] = adc[0];
-      log_sample.adc[1] = adc[1];
-      log_sample.adc[2] = adc[2];
-      log_sample.adc[3] = adc[3];
-      if (DataLogger_Append(&log_sample, 3000U) != HAL_OK)
-      {
-        if (g_rtc_setting_mode) { Serial_Write("LOG WRITE ERROR\r\n"); }
-      }
+      if (g_rtc_setting_mode) { Serial_Write("LOG WRITE ERROR\r\n"); }
     }
     /* 按原定时基准推进，不把采样/写入耗时累计进记录周期。
        超时后不伪造缺失时刻的历史样本。 */
@@ -694,25 +814,27 @@ static void Samples_ProcessAndOutput(void)
   {
     return;
   }
-  if (!g_sht_filter_valid) { return; }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s\r\n",
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
                  (double)u7_temperature, (double)u11_pressure,
-                 (double)u11_temperature, adc_text);
+                 (double)u11_temperature, adc_text,
+                 (double)u7_pressure_average,
+                 (double)u11_pressure_average,
+                 (double)pressure_average);
   Serial_Write(line);
 }
 
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
+  * @brief  发生错误时执行此函数。
+  * @retval 无
   */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+  /* 可在此添加用户代码，用于记录 HAL 错误返回状态。 */
   __disable_irq();
   while (1)
   {
@@ -722,17 +844,16 @@ void Error_Handler(void)
 
 #ifdef  USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
+  * @brief  报告 assert_param 错误所在的源文件名和行号。
+  * @param  file: 指向源文件名的指针。
+  * @param  line: assert_param 错误所在的源代码行号。
+  * @retval 无
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* 可在此添加用户代码，输出文件名和行号，例如：
+     printf("参数值错误：文件 %s，第 %d 行\r\n", file, line)。 */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
