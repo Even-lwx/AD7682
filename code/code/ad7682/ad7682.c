@@ -1,52 +1,70 @@
 #include "ad7682.h"
 
 /* 依据数据手册 Rev.B 第 24、25、28 页：单端接地参考、全带宽、
- * 外部参考源（关闭内部参考和缓冲）、关闭通道序列器、开启 CFG 回读。 */
-#define AD7682_CFG_BASE 0x3C70U
+ * 外部参考源直接接 REF、关闭内部参考缓冲器和温度传感器、
+ * 关闭通道序列器、关闭 CFG 回读。REF[5:3] = 110，
+ * RB[0] = 1 表示不回读 CFG，基础配置值为 0x3C71。 */
+#define AD7682_CFG_BASE 0x3C71U
+#define AD7682_CHANNEL_DUMMY_CONVERSIONS 2U
 
-/* 输入端为 100 ohm + 100 pF 时 RC 约 10 ns；100 us 仍远大于
- * AD7682 要求的最小采集时间，同时避免无谓地拖慢多通道扫描。 */
-#define AD7682_ACQUISITION_DELAY_US 100U
-
+/* 输入端为 100 ohm + 100 pF 时 RC 约 10 ns。这里把 CNV 下降沿后、
+ * 下一次转换前的采集保持时间设为 500 us，给传感器输出、输入电容和
+ * 模拟地/参考电压网络更充分的稳定时间。这个时间不会延长当前转换，
+ * 而是延长下一次转换开始前的采集阶段。 */
 static void AD7682_DelayUs(uint32_t us)
 {
     volatile uint32_t loops = (SystemCoreClock / 1000000UL) * us;
     while (loops-- != 0U) { __NOP(); }
 }
 
-/* 完成一次“启动转换、发送 CFG、读取数据/回读”的完整 SPI 事务。
+/* 完成一次“启动转换、发送 CFG、读取数据”的完整 SPI 事务。
  * 不使用 BUSY，CNV 保持低电平结束，下一次调用产生新的上升沿。
- * 时序余量按 VDD=3 V、tCONV(max)=3.2 us、tACQ(min)=1.8 us 设置。 */
+ * 时序余量按 VDD=3 V、tCONV(max)=3.2 us、tACQ(min)=1.8 us 设置。
+ * 手册要求 CNV 上升沿前后保持数字引脚安静，因此 CNV 上升沿前的
+ * 10 us 安静时间和转换期间一起屏蔽短时中断；不会屏蔽 500 us 采集等待。 */
 static AD7682_Status AD7682_Transfer(AD7682_Handle *dev, uint16_t cfg,
+                                    uint8_t update_cfg,
                                     uint16_t *raw, uint16_t *readback,
                                     uint32_t timeout_ms)
 {
-    uint16_t wire = (uint16_t)(cfg << 2);
-    uint8_t tx[4];
-    uint8_t rx[4] = {0U};
+    /* CFG[13]=0 时保持当前配置；配置更新完成后 DIN 全部保持低电平。 */
+    uint16_t wire = update_cfg != 0U ? (uint16_t)(cfg << 2) : 0U;
+    uint8_t tx[2];
+    uint8_t rx[2] = {0U};
     HAL_StatusTypeDef status;
+    uint32_t primask;
     tx[0] = (uint8_t)(wire >> 8);
     tx[1] = (uint8_t)wire;
-    tx[2] = 0U;
-    tx[3] = 0U;
+    /* 手册建议 CNV 上升沿前保持 SCK/DIN 安静。这里把 SPI 完成后的
+     * 安静窗口放在本次事务开头，并与转换窗口一起保护，避免 SysTick、
+     * TIM14 或 UART ISR 在 CNV 边沿附近插入数字活动。 */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    AD7682_DelayUs(10U);
     HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_SET);
     /* tCONV 最大值为 3.2 us；CNV 保持高电平，留出足够转换余量。 */
     AD7682_DelayUs(10U);
     HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
+    __set_PRIMASK(primask);
     /*
      * SPI 传输前保持 CNV 低电平，满足 tACQ；同时给新选通道及其 RC
-     * 输入网络约 100 us 的稳定时间。
+     * 输入网络约 500 us 的稳定时间。
      */
     AD7682_DelayUs(AD7682_ACQUISITION_DELAY_US);
-    /* 前 16 位为转换数据，随后 14 位为 CFG 回读；最后两位忽略（SDO 高阻）。 */
-    status = HAL_SPI_TransmitReceive(dev->hspi, tx, rx, 4U, timeout_ms);
-    AD7682_DelayUs(10U);
+    /* RB=1 时只需要 16 个 SCK：前 16 位为转换结果，之后 SDO 已进入高阻。
+     * RB=0 会开启 CFG 回读，需要 30 个 SCK；本驱动不使用该模式。
+     * SPI 突发期间不允许中断插入，避免 SCK 被拉长或 UART/TIM 的数字边沿
+     * 与 ADC 的最后几位转换数据重叠；500 us 采集等待仍保持可中断。 */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    status = HAL_SPI_TransmitReceive(dev->hspi, tx, rx, 2U, timeout_ms);
+    __set_PRIMASK(primask);
     if (status != HAL_OK)
     {
         return status == HAL_TIMEOUT ? AD7682_TIMEOUT : AD7682_ERROR;
     }
     *raw = (uint16_t)(((uint16_t)rx[0] << 8) | rx[1]);
-    *readback = (uint16_t)((((uint16_t)rx[2] << 8) | rx[3]) >> 2);
+    *readback = 0U;
     return AD7682_OK;
 }
 
@@ -70,8 +88,8 @@ AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
     return AD7682_ReadChannel(dev, 2U, &discarded_code, 100U);
 }
 
-/* AD7682 的配置写入和转换结果存在一拍流水线。通道切换后先发送一次
- * 新 CFG 并丢弃返回值，下一次传输才作为该通道的有效结果。 */
+/* AD7682 的配置写入和转换结果存在流水线延迟。通道切换后连续发送两次
+ * 新 CFG，并丢弃这两次转换结果；之后的转换才作为该通道的有效结果。 */
 static AD7682_Status AD7682_EnsureChannel(AD7682_Handle *dev,
                                           uint8_t channel,
                                           uint32_t timeout_ms)
@@ -79,6 +97,7 @@ static AD7682_Status AD7682_EnsureChannel(AD7682_Handle *dev,
     uint16_t raw;
     uint16_t readback;
     uint16_t cfg;
+    uint8_t i;
     AD7682_Status status;
 
     if (dev->configured_channel_valid != 0U &&
@@ -87,11 +106,15 @@ static AD7682_Status AD7682_EnsureChannel(AD7682_Handle *dev,
         return AD7682_OK;
     }
     cfg = (uint16_t)(AD7682_CFG_BASE | ((uint16_t)channel << 7));
-    status = AD7682_Transfer(dev, cfg, &raw, &readback, timeout_ms);
-    if (status != AD7682_OK)
+    for (i = 0U; i < AD7682_CHANNEL_DUMMY_CONVERSIONS; i++)
     {
-        dev->configured_channel_valid = 0U;
-        return status;
+        status = AD7682_Transfer(dev, cfg, i == 0U ? 1U : 0U,
+                                 &raw, &readback, timeout_ms);
+        if (status != AD7682_OK)
+        {
+            dev->configured_channel_valid = 0U;
+            return status;
+        }
     }
     dev->configured_channel = channel;
     dev->configured_channel_valid = 1U;
@@ -112,24 +135,23 @@ AD7682_Status AD7682_ReadChannel(AD7682_Handle *dev, uint8_t channel,
     cfg = (uint16_t)(AD7682_CFG_BASE | ((uint16_t)channel << 7));
     status = AD7682_EnsureChannel(dev, channel, timeout_ms);
     if (status != AD7682_OK) { return status; }
-    status = AD7682_Transfer(dev, cfg, &raw, &readback, timeout_ms);
+    status = AD7682_Transfer(dev, cfg, 0U, &raw, &readback, timeout_ms);
     if (status != AD7682_OK)
     {
         dev->configured_channel_valid = 0U;
         return status;
     }
-    /* 部分板级 SDO 通路不能稳定返回 CFG。保留回读用于诊断，
-     * 但以 HAL 传输结果作为通信成功判据。 */
+    /* RB=1 时没有 CFG 回读数据；通信成功以 SPI 事务返回状态为准。 */
     (void)readback;
     *code = raw;
     return AD7682_OK;
 }
 
 AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
-                                        uint16_t samples[4],
+                                        uint16_t samples[5],
                                         uint32_t timeout_ms)
 {
-    uint16_t values[4];
+    uint16_t values[5];
     uint16_t readback;
     uint16_t cfg;
     uint16_t raw;
@@ -142,9 +164,9 @@ AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
     cfg = (uint16_t)(AD7682_CFG_BASE | ((uint16_t)channel << 7));
     status = AD7682_EnsureChannel(dev, channel, timeout_ms);
     if (status != AD7682_OK) { return status; }
-    for (i = 0U; i < 4U; i++)
+    for (i = 0U; i < 5U; i++)
     {
-        status = AD7682_Transfer(dev, cfg, &raw, &readback, timeout_ms);
+        status = AD7682_Transfer(dev, cfg, 0U, &raw, &readback, timeout_ms);
         if (status != AD7682_OK)
         {
             dev->configured_channel_valid = 0U;
@@ -152,21 +174,21 @@ AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
         }
         values[i] = raw;
     }
-    for (i = 0U; i < 4U; i++) { samples[i] = values[i]; }
+    for (i = 0U; i < 5U; i++) { samples[i] = values[i]; }
     return AD7682_OK;
 }
 
-static uint16_t AD7682_Median4(const uint16_t values[4])
+uint16_t AD7682_Median5(const uint16_t values[5])
 {
-    uint16_t sorted[4];
+    uint16_t sorted[5];
     uint16_t temp;
     uint8_t i;
     uint8_t j;
 
-    for (i = 0U; i < 4U; i++) { sorted[i] = values[i]; }
-    for (i = 0U; i < 3U; i++)
+    for (i = 0U; i < 5U; i++) { sorted[i] = values[i]; }
+    for (i = 0U; i < 4U; i++)
     {
-        for (j = 0U; j < (uint8_t)(3U - i); j++)
+        for (j = 0U; j < (uint8_t)(4U - i); j++)
         {
             if (sorted[j] > sorted[j + 1U])
             {
@@ -176,15 +198,15 @@ static uint16_t AD7682_Median4(const uint16_t values[4])
             }
         }
     }
-    return (uint16_t)(((uint32_t)sorted[1] + sorted[2]) / 2U);
+    return sorted[2];
 }
 
-/* 顺序扫描四路输入：每个通道先丢弃一次切换结果，再取 4 次有效转换，
- * 用中间两个样本的平均值输出。只有四路均成功时才更新数组。 */
+/* 顺序扫描四路输入：每个通道先丢弃两次切换结果，再取 5 次有效转换，
+ * 用 5 个样本的中位数输出。只有四路均成功时才更新数组。 */
 AD7682_Status AD7682_ReadFourChannels(AD7682_Handle *dev, uint16_t codes[4],
                                       uint32_t timeout_ms)
 {
-    uint16_t values[4][4];
+    uint16_t values[4][5];
     uint8_t i;
     AD7682_Status status;
     if (codes == NULL) { return AD7682_ERROR; }
@@ -193,15 +215,15 @@ AD7682_Status AD7682_ReadFourChannels(AD7682_Handle *dev, uint16_t codes[4],
         status = AD7682_ReadChannelSamples(dev, i, values[i], timeout_ms);
         if (status != AD7682_OK) { return status; }
     }
-    for (i = 0U; i < 4U; i++) { codes[i] = AD7682_Median4(values[i]); }
+    for (i = 0U; i < 4U; i++) { codes[i] = AD7682_Median5(values[i]); }
     return AD7682_OK;
 }
 
 AD7682_Status AD7682_ReadFourChannelsSamples(AD7682_Handle *dev,
-                                             uint16_t samples[4][4],
+                                             uint16_t samples[4][5],
                                              uint32_t timeout_ms)
 {
-    uint16_t values[4][4];
+    uint16_t values[4][5];
     uint8_t channel;
     uint8_t sample;
     AD7682_Status status;
@@ -214,7 +236,7 @@ AD7682_Status AD7682_ReadFourChannelsSamples(AD7682_Handle *dev,
     }
     for (channel = 0U; channel < 4U; channel++)
     {
-        for (sample = 0U; sample < 4U; sample++)
+        for (sample = 0U; sample < 5U; sample++)
         {
             samples[channel][sample] = values[channel][sample];
         }

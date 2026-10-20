@@ -2,22 +2,20 @@
 /**
   ******************************************************************************
   * @file    spi.c
-  * @brief   This file provides code for the configuration
-  *          of the SPI instances.
+  * @brief   本文件提供 SPI 外设的配置代码。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "spi.h"
 
 /* USER CODE BEGIN 0 */
@@ -27,7 +25,7 @@
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
-/* SPI1 init function */
+/* SPI1 初始化函数。 */
 void MX_SPI1_Init(void)
 {
 
@@ -45,14 +43,14 @@ void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  /* AD7682: conservative 2 MHz at PCLK=64 MHz. */
+  /* AD7682 使用保守的 2 MHz SPI 时钟（PCLK=64 MHz）。 */
   hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  /* CNV is the ADC frame signal; do not generate an unrelated NSS pulse. */
+  /* CNV 是 ADC 的帧控制信号，不生成无关的 NSS 脉冲。 */
   hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
@@ -63,7 +61,7 @@ void MX_SPI1_Init(void)
   /* USER CODE END SPI1_Init 2 */
 
 }
-/* SPI2 init function */
+/* SPI2 初始化函数。 */
 void MX_SPI2_Init(void)
 {
 
@@ -108,11 +106,11 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
   /* USER CODE BEGIN SPI1_MspInit 0 */
 
   /* USER CODE END SPI1_MspInit 0 */
-    /* SPI1 clock enable */
+    /* 使能 SPI1 外设时钟。 */
     __HAL_RCC_SPI1_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**SPI1 GPIO Configuration
+    /** SPI1 GPIO 配置：
     PA1     ------> SPI1_SCK
     PA6     ------> SPI1_MISO
     PA7     ------> SPI1_MOSI
@@ -120,7 +118,8 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_6|GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    /* AD7682 仅使用 2 MHz SPI；降低边沿速度，减少 SCK/DIN 对模拟输入和 REF 的串扰。 */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF0_SPI1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -133,12 +132,12 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
   /* USER CODE BEGIN SPI2_MspInit 0 */
 
   /* USER CODE END SPI2_MspInit 0 */
-    /* SPI2 clock enable */
+    /* 使能 SPI2 外设时钟。 */
     __HAL_RCC_SPI2_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    /**SPI2 GPIO Configuration
+    /** SPI2 GPIO 配置：
     PA0     ------> SPI2_SCK
     PA4     ------> SPI2_MOSI
     PB2     ------> SPI2_MISO
@@ -178,10 +177,10 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
   /* USER CODE BEGIN SPI1_MspDeInit 0 */
 
   /* USER CODE END SPI1_MspDeInit 0 */
-    /* Peripheral clock disable */
+    /* 关闭外设时钟。 */
     __HAL_RCC_SPI1_CLK_DISABLE();
 
-    /**SPI1 GPIO Configuration
+    /** SPI1 GPIO 配置：
     PA1     ------> SPI1_SCK
     PA6     ------> SPI1_MISO
     PA7     ------> SPI1_MOSI
@@ -197,10 +196,10 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
   /* USER CODE BEGIN SPI2_MspDeInit 0 */
 
   /* USER CODE END SPI2_MspDeInit 0 */
-    /* Peripheral clock disable */
+    /* 关闭外设时钟。 */
     __HAL_RCC_SPI2_CLK_DISABLE();
 
-    /**SPI2 GPIO Configuration
+    /** SPI2 GPIO 配置：
     PA0     ------> SPI2_SCK
     PA4     ------> SPI2_MOSI
     PB2     ------> SPI2_MISO

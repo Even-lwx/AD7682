@@ -309,7 +309,7 @@ static void Devices_Initialize(void)
   }
   Serial_Write(g_adc_status == AD7682_OK ? "AD7682 INIT OK\r\n" :
                                         "AD7682 INIT ERROR\r\n");
-  Serial_Write("AD7682 MULTI: 4CH, DUMMY+4 VALID, MEDIAN4, ACQ=100us\r\n");
+  Serial_Write("AD7682 MULTI: 4CH, DUMMY2+5 VALID, MEDIAN5, ACQ=500us, RB=1, CFG-ONCE, SPI-QUIET\r\n");
 
   Serial_Write("SHT41 INIT...\r\n");
   status = HAL_ERROR;
@@ -711,6 +711,15 @@ static void Samples_ProcessAndOutput(void)
   uint32_t interval;
   uint16_t adc[4] = {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
                      SENSOR_INVALID_ADC, SENSOR_INVALID_ADC};
+  uint16_t adc_samples[4][5] = {
+      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
+       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
+      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
+       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
+      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
+       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
+      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
+       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC}};
   float battery_voltage;
   float sht_temperature = SENSOR_INVALID_FLOAT;
   float sht_humidity = SENSOR_INVALID_FLOAT;
@@ -721,8 +730,9 @@ static void Samples_ProcessAndOutput(void)
   float u7_pressure_average;
   float u11_pressure_average;
   float pressure_average;
-  char line[256];
+  char line[384];
   char adc_text[128];
+  char adc_raw_text[160];
   DataLogger_Sample log_sample;
   HAL_StatusTypeDef sht_status;
 
@@ -764,19 +774,47 @@ static void Samples_ProcessAndOutput(void)
                       Pressure_IsValid(u11_pressure)) ?
                      ((u7_pressure + u11_pressure) * 0.5f) :
                      SENSOR_INVALID_FLOAT;
-  /* 多通道保守采样：切换后丢弃一次，再每通道取4次有效转换，
-     由驱动返回中间两个样本的平均值。 */
-  g_adc_status = AD7682_ReadFourChannels(&g_ad7682, adc, 10U);
+  /* 多通道保守采样：切换后丢弃两次，再每通道取5次有效转换，
+     由驱动返回5个样本的中位数。 */
+  g_adc_status = AD7682_ReadFourChannelsSamples(&g_ad7682, adc_samples, 10U);
   if (g_adc_status == AD7682_OK)
   {
+    adc[0] = AD7682_Median5(adc_samples[0]);
+    adc[1] = AD7682_Median5(adc_samples[1]);
+    adc[2] = AD7682_Median5(adc_samples[2]);
+    adc[3] = AD7682_Median5(adc_samples[3]);
     (void)snprintf(adc_text, sizeof(adc_text),
                    "%u,%u,%u,%u", (unsigned)adc[0], (unsigned)adc[1],
                    (unsigned)adc[2], (unsigned)adc[3]);
+    (void)snprintf(adc_raw_text, sizeof(adc_raw_text),
+                   "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+                   (unsigned)adc_samples[0][0], (unsigned)adc_samples[0][1],
+                   (unsigned)adc_samples[0][2], (unsigned)adc_samples[0][3],
+                   (unsigned)adc_samples[0][4], (unsigned)adc_samples[1][0],
+                   (unsigned)adc_samples[1][1], (unsigned)adc_samples[1][2],
+                   (unsigned)adc_samples[1][3], (unsigned)adc_samples[1][4],
+                   (unsigned)adc_samples[2][0], (unsigned)adc_samples[2][1],
+                   (unsigned)adc_samples[2][2], (unsigned)adc_samples[2][3],
+                   (unsigned)adc_samples[2][4], (unsigned)adc_samples[3][0],
+                   (unsigned)adc_samples[3][1], (unsigned)adc_samples[3][2],
+                   (unsigned)adc_samples[3][3], (unsigned)adc_samples[3][4]);
   }
   else
   {
     (void)snprintf(adc_text, sizeof(adc_text),
                    "%u,%u,%u,%u",
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC);
+    (void)snprintf(adc_raw_text, sizeof(adc_raw_text),
+                   "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
+                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
                    (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
                    (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC);
   }
@@ -814,14 +852,14 @@ static void Samples_ProcessAndOutput(void)
   {
     return;
   }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f\r\n",
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f,%s\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
                  (double)u7_temperature, (double)u11_pressure,
                  (double)u11_temperature, adc_text,
                  (double)u7_pressure_average,
                  (double)u11_pressure_average,
-                 (double)pressure_average);
+                 (double)pressure_average, adc_raw_text);
   Serial_Write(line);
 }
 
