@@ -2,22 +2,20 @@
 /**
   ******************************************************************************
   * @file    usart.c
-  * @brief   This file provides code for the configuration
-  *          of the USART instances.
+  * @brief   本文件提供 USART 外设的配置代码。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
@@ -26,7 +24,7 @@
 
 UART_HandleTypeDef huart1;
 
-/* USART1 init function */
+/* USART1 初始化函数。 */
 
 void MX_USART1_UART_Init(void)
 {
@@ -82,7 +80,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE END USART1_MspInit 0 */
 
-  /** Initializes the peripherals clocks
+  /** 初始化外设时钟。
   */
     PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1;
     PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
@@ -91,11 +89,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
       Error_Handler();
     }
 
-    /* USART1 clock enable */
+    /* 使能 USART1 外设时钟。 */
     __HAL_RCC_USART1_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**USART1 GPIO Configuration
+    /** USART1 GPIO 配置：
     PA9     ------> USART1_TX
     PA10     ------> USART1_RX
     */
@@ -122,10 +120,10 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
   /* USER CODE BEGIN USART1_MspDeInit 0 */
 
   /* USER CODE END USART1_MspDeInit 0 */
-    /* Peripheral clock disable */
+    /* 关闭外设时钟。 */
     __HAL_RCC_USART1_CLK_DISABLE();
 
-    /**USART1 GPIO Configuration
+    /** USART1 GPIO 配置：
     PA9     ------> USART1_TX
     PA10     ------> USART1_RX
     */

@@ -2,17 +2,16 @@
 /**
   ******************************************************************************
   * @file    stm32g0xx_hal_conf.h
-  * @author  MCD Application Team
-  * @brief   HAL configuration file.
+  * @author  MCD 应用团队
+  * @brief   HAL 配置文件。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2018 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
@@ -26,12 +25,12 @@
 extern "C" {
 #endif
 
-/* Exported types ------------------------------------------------------------*/
-/* Exported constants --------------------------------------------------------*/
+/* 对外提供的类型。 */
+/* 对外提供的常量。 */
 
-/* ########################## Module Selection ############################## */
+/* ########################## 模块选择 ##################################### */
 /**
-  * @brief This is the list of modules to be used in the HAL driver
+  * @brief HAL 驱动中启用的模块列表。
   */
 #define HAL_MODULE_ENABLED
 #define HAL_ADC_MODULE_ENABLED
@@ -66,9 +65,9 @@ extern "C" {
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_CORTEX_MODULE_ENABLED
 
-/* ########################## Register Callbacks selection ############################## */
+/* ########################## 注册回调选择 ################################# */
 /**
-  * @brief This is the list of modules where register callback can be used
+  * @brief 可使用注册回调的模块列表。
   */
 #define USE_HAL_ADC_REGISTER_CALLBACKS    0u
 #define USE_HAL_CEC_REGISTER_CALLBACKS    0u
@@ -91,119 +90,111 @@ extern "C" {
 #define USE_HAL_USART_REGISTER_CALLBACKS  0u
 #define USE_HAL_WWDG_REGISTER_CALLBACKS   0u
 
-/* ########################## Oscillator Values adaptation ####################*/
+/* ########################## 振荡器参数 ################################### */
 /**
-  * @brief Adjust the value of External High Speed oscillator (HSE) used in your application.
-  *        This value is used by the RCC HAL module to compute the system frequency
-  *        (when HSE is used as system clock source, directly or through the PLL).
+  * @brief 设置应用中使用的外部高速振荡器（HSE）频率。
+  *        RCC HAL 模块使用该值计算系统频率（HSE 直接或经 PLL 作为系统时钟源时）。
   */
 #if !defined  (HSE_VALUE)
-#define HSE_VALUE    (8000000UL)         /*!< Value of the External oscillator in Hz */
+#define HSE_VALUE    (8000000UL)         /*!< 外部振荡器频率，单位 Hz。 */
 #endif /* HSE_VALUE */
 
 #if !defined  (HSE_STARTUP_TIMEOUT)
-#define HSE_STARTUP_TIMEOUT    (100UL)         /*!< Time out for HSE start up, in ms */
+#define HSE_STARTUP_TIMEOUT    (100UL)         /*!< HSE 启动超时时间，单位 ms。 */
 #endif /* HSE_STARTUP_TIMEOUT */
 
 /**
-  * @brief Internal High Speed oscillator (HSI) value.
-  *        This value is used by the RCC HAL module to compute the system frequency
-  *        (when HSI is used as system clock source, directly or through the PLL).
+  * @brief 内部高速振荡器（HSI）频率。
+  *        RCC HAL 模块使用该值计算系统频率（HSI 直接或经 PLL 作为系统时钟源时）。
   */
 #if !defined  (HSI_VALUE)
-#define HSI_VALUE    (16000000UL)            /*!< Value of the Internal oscillator in Hz*/
+#define HSI_VALUE    (16000000UL)            /*!< 内部振荡器频率，单位 Hz。 */
 #endif /* HSI_VALUE */
 
 #if defined(STM32G0C1xx) || defined(STM32G0B1xx) || defined(STM32G0B0xx)
 /**
-  * @brief Internal High Speed oscillator (HSI48) value for USB FS, SDMMC and RNG.
-  *        This internal oscillator is mainly dedicated to provide a high precision clock to
-  *        the USB peripheral by means of a special Clock Recovery System (CRS) circuitry.
-  *        When the CRS is not used, the HSI48 RC oscillator runs on it default frequency
-  *        which is subject to manufacturing process variations.
+  * @brief USB FS、SDMMC 和 RNG 使用的内部高速振荡器（HSI48）频率。
+  *        该振荡器主要通过时钟恢复系统（CRS）为 USB 外设提供高精度时钟。
+  *        未使用 CRS 时，HSI48 RC 振荡器以默认频率运行，该频率会受制造工艺影响。
   */
 #if !defined  (HSI48_VALUE)
-  #define HSI48_VALUE   48000000U             /*!< Value of the Internal High Speed oscillator for USB FS/SDMMC/RNG in Hz.
-                                               The real value my vary depending on manufacturing process variations.*/
+  #define HSI48_VALUE   48000000U             /*!< USB FS/SDMMC/RNG 使用的内部高速振荡器频率，单位 Hz。
+                                               实际值可能因制造工艺变化而不同。 */
 #endif /* HSI48_VALUE */
 #endif
 
 /**
-  * @brief Internal Low Speed oscillator (LSI) value.
+  * @brief 内部低速振荡器（LSI）频率。
   */
 #if !defined  (LSI_VALUE)
-#define LSI_VALUE  (32000UL)                /*!< LSI Typical Value in Hz*/
-#endif /* LSI_VALUE */                      /*!< Value of the Internal Low Speed oscillator in Hz
-The real value may vary depending on the variations
-in voltage and temperature.*/
+#define LSI_VALUE  (32000UL)                /*!< LSI 典型频率，单位 Hz。 */
+#endif /* LSI_VALUE */                      /*!< 内部低速振荡器频率，单位 Hz。
+实际值可能随电压和温度变化而变化。 */
 /**
-  * @brief External Low Speed oscillator (LSE) value.
-  *        This value is used by the UART, RTC HAL module to compute the system frequency
+  * @brief 外部低速振荡器（LSE）频率。
+  *        UART、RTC HAL 模块使用该值计算系统频率。
   */
 #if !defined  (LSE_VALUE)
-#define LSE_VALUE    (32768UL)               /*!< Value of the External oscillator in Hz*/
+#define LSE_VALUE    (32768UL)               /*!< 外部振荡器频率，单位 Hz。 */
 #endif /* LSE_VALUE */
 
 #if !defined  (LSE_STARTUP_TIMEOUT)
-#define LSE_STARTUP_TIMEOUT    (5000UL)      /*!< Time out for LSE start up, in ms */
+#define LSE_STARTUP_TIMEOUT    (5000UL)      /*!< LSE 启动超时时间，单位 ms。 */
 #endif /* LSE_STARTUP_TIMEOUT */
 
 /**
-  * @brief External clock source for I2S1 peripheral
-  *        This value is used by the RCC HAL module to compute the I2S1 clock source
-  *        frequency.
+  * @brief I2S1 外部时钟源频率。
+  *        RCC HAL 模块使用该值计算 I2S1 时钟源频率。
   */
 #if !defined  (EXTERNAL_I2S1_CLOCK_VALUE)
-#define EXTERNAL_I2S1_CLOCK_VALUE    (12288000UL) /*!< Value of the I2S1 External clock source in Hz*/
+#define EXTERNAL_I2S1_CLOCK_VALUE    (12288000UL) /*!< I2S1 外部时钟源频率，单位 Hz。 */
 #endif /* EXTERNAL_I2S1_CLOCK_VALUE */
 
 #if defined(STM32G0C1xx) || defined(STM32G0B1xx) || defined(STM32G0B0xx)
 /**
-  * @brief External clock source for I2S2 peripheral
-  *        This value is used by the RCC HAL module to compute the I2S2 clock source
-  *        frequency.
+  * @brief I2S2 外部时钟源频率。
+  *        RCC HAL 模块使用该值计算 I2S2 时钟源频率。
   */
 #if !defined  (EXTERNAL_I2S2_CLOCK_VALUE)
-  #define EXTERNAL_I2S2_CLOCK_VALUE    48000U /*!< Value of the I2S2 External clock source in Hz*/
+  #define EXTERNAL_I2S2_CLOCK_VALUE    48000U /*!< I2S2 外部时钟源频率，单位 Hz。 */
 #endif /* EXTERNAL_I2S2_CLOCK_VALUE */
 #endif
 
-/* Tip: To avoid modifying this file each time you need to use different HSE,
-   ===  you can define the HSE value in your toolchain compiler preprocessor. */
+/* 提示：如需使用不同的 HSE 频率，可在编译器预处理器中定义 HSE_VALUE，
+   这样无需每次修改本文件。 */
 
-/* ########################### System Configuration ######################### */
+/* ########################### 系统配置 ################################### */
 /**
-  * @brief This is the HAL system configuration section
+  * @brief HAL 系统配置区。
   */
-#define  VDD_VALUE                    (3300UL)                                        /*!< Value of VDD in mv */
-#define  TICK_INT_PRIORITY            3U /*!< tick interrupt priority */
+#define  VDD_VALUE                    (3300UL)                                        /*!< VDD 电压，单位 mV。 */
+#define  TICK_INT_PRIORITY            3U /*!< 系统滴答中断优先级。 */
 #define  USE_RTOS                     0U
 #define  PREFETCH_ENABLE              1U
 #define  INSTRUCTION_CACHE_ENABLE     1U
 
-/* ################## SPI peripheral configuration ########################## */
+/* ################## SPI 外设配置 ######################################## */
 
-/* CRC FEATURE: Use to activate CRC feature inside HAL SPI Driver
-* Activated: CRC code is present inside driver
-* Deactivated: CRC code cleaned from driver
+/* CRC 功能：用于启用 HAL SPI 驱动中的 CRC。
+* 启用：驱动包含 CRC 代码。
+* 禁用：驱动移除 CRC 代码。
 */
 
 #define USE_SPI_CRC                     0U
 
-/* ################## CRYP peripheral configuration ########################## */
+/* ################## CRYP 外设配置 ####################################### */
 
 #define USE_HAL_CRYP_SUSPEND_RESUME     1U
 
-/* ########################## Assert Selection ############################## */
+/* ########################## 断言选择 ##################################### */
 /**
-  * @brief Uncomment the line below to expanse the "assert_param" macro in the
-  *        HAL drivers code
+  * @brief 取消下面一行的注释，可在 HAL 驱动代码中展开 assert_param 宏。
   */
 /* #define USE_FULL_ASSERT    1U */
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 /**
-  * @brief Include modules header file
+  * @brief 包含各模块头文件。
   */
 
 #ifdef HAL_RCC_MODULE_ENABLED
@@ -327,18 +318,15 @@ in voltage and temperature.*/
 #include "stm32g0xx_hal_wwdg.h"
 #endif /* HAL_WWDG_MODULE_ENABLED */
 
-/* Exported macro ------------------------------------------------------------*/
+/* 对外提供的宏。 */
 #ifdef  USE_FULL_ASSERT
 /**
-  * @brief  The assert_param macro is used for functions parameters check.
-  * @param  expr If expr is false, it calls assert_failed function
-  *         which reports the name of the source file and the source
-  *         line number of the call that failed.
-  *         If expr is true, it returns no value.
-  * @retval None
+  * @brief  assert_param 宏用于检查函数参数。
+  * @param  expr 为假时调用 assert_failed，报告出错的源文件名和行号；为真时不执行任何操作。
+  * @retval 无
   */
 #define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
-/* Exported functions ------------------------------------------------------- */
+/* 对外提供的函数。 */
 void assert_failed(uint8_t *file, uint32_t line);
 #else
 #define assert_param(expr) ((void)0U)

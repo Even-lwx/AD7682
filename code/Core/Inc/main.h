@@ -2,23 +2,21 @@
 /**
   ******************************************************************************
   * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
+  * @brief          : main.c 的头文件，包含应用程序的公共定义。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* 防止头文件被重复包含。 */
 #ifndef __MAIN_H
 #define __MAIN_H
 
@@ -26,37 +24,40 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "stm32g0xx_hal.h"
 
-/* Private includes ----------------------------------------------------------*/
+/* Other sensors/telemetry request period; ADC has its own 100 Hz TIM3 ISR. */
+#define SENSOR_SAMPLE_PERIOD_MS 20U
+
+/* 私有头文件包含。 */
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
 
-/* Exported types ------------------------------------------------------------*/
+/* 对外提供的类型。 */
 /* USER CODE BEGIN ET */
 
 /* USER CODE END ET */
 
-/* Exported constants --------------------------------------------------------*/
+/* 对外提供的常量。 */
 /* USER CODE BEGIN EC */
 
 /* USER CODE END EC */
 
-/* Exported macro ------------------------------------------------------------*/
+/* 对外提供的宏。 */
 /* USER CODE BEGIN EM */
 
 /* USER CODE END EM */
 
-/* Exported functions prototypes ---------------------------------------------*/
+/* 对外提供的函数声明。 */
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
 
-/* Private defines -----------------------------------------------------------*/
+/* 私有定义。 */
 
 /* USER CODE BEGIN Private defines */
 

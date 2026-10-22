@@ -1,4 +1,6 @@
-/* W25Q128 每分钟历史数据记录。 */
+/* W25Q128 历史数据记录；采样间隔和导出顺序保存在 MCU 内部 Flash。
+ * Flash 固定记录为 32 字节：温度/湿度/ADC 保留 0.01，压力保留 0.1。
+ * 新固件兼容旧整数 ADC 记录；旧固件不能读取新的小数 ADC 记录。 */
 #ifndef DATA_LOGGER_H
 #define DATA_LOGGER_H
 
@@ -12,7 +14,7 @@ typedef struct
     float humidity_rh;
     float pressure_u7_hpa;
     float pressure_u11_hpa;
-    uint16_t adc[4];
+    float adc[4]; /* Filtered ADC codes; Flash preserves 0.01 code. */
 } DataLogger_Sample;
 
 HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout);

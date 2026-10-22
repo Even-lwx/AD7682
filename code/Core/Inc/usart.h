@@ -2,22 +2,20 @@
 /**
   ******************************************************************************
   * @file    usart.h
-  * @brief   This file contains all the function prototypes for
-  *          the usart.c file
+  * @brief   本文件包含 usart.c 中的所有函数声明
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* 防止头文件被重复包含。 */
 #ifndef __USART_H__
 #define __USART_H__
 
@@ -25,7 +23,7 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "main.h"
 
 /* USER CODE BEGIN Includes */

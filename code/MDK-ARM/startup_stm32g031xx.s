@@ -28,7 +28,9 @@
 ;   <o> Stack Size (in Bytes) <0x0-0xFFFFFFFF:8>
 ; </h>
 
-Stack_Size		EQU     0x400
+; Linker reports > 1 KB for sensor formatting + nested command processing.
+; Reserve 2 KB including UART interrupt preemption; STM32G031 has 8 KB SRAM.
+Stack_Size		EQU     0x800
 
                 AREA    STACK, NOINIT, READWRITE, ALIGN=3
 Stack_Mem       SPACE   Stack_Size

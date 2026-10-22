@@ -85,6 +85,39 @@ HAL_StatusTypeDef LPS22HH_Init(SoftI2C_HandleTypeDef *handle, uint32_t timeout)
     return LPS22HH_InitDevice(handle, &g_lps22hh_u11, timeout);
 }
 
+HAL_StatusTypeDef LPS22HH_SetPowerDown(SoftI2C_HandleTypeDef *handle,
+                                       const LPS22HH_Device *device,
+                                       uint8_t *saved_ctrl_reg1,
+                                       uint32_t timeout)
+{
+    uint8_t ctrl_reg1;
+    HAL_StatusTypeDef status;
+
+    if (handle == NULL || device == NULL || saved_ctrl_reg1 == NULL)
+    {
+        return HAL_ERROR;
+    }
+    status = LPS22HH_ReadRegisters(handle, device->address,
+                                   LPS22HH_REG_CTRL_REG1, &ctrl_reg1,
+                                   1U, timeout);
+    if (status != HAL_OK) { return status; }
+    *saved_ctrl_reg1 = ctrl_reg1;
+    /* ODR[2:0]=000 powers down pressure/temperature conversions. */
+    ctrl_reg1 &= (uint8_t)~0x70U;
+    return LPS22HH_WriteRegister(handle, device->address,
+                                 LPS22HH_REG_CTRL_REG1, ctrl_reg1, timeout);
+}
+
+HAL_StatusTypeDef LPS22HH_RestoreCtrlReg1(SoftI2C_HandleTypeDef *handle,
+                                          const LPS22HH_Device *device,
+                                          uint8_t ctrl_reg1,
+                                          uint32_t timeout)
+{
+    if (handle == NULL || device == NULL) { return HAL_ERROR; }
+    return LPS22HH_WriteRegister(handle, device->address,
+                                 LPS22HH_REG_CTRL_REG1, ctrl_reg1, timeout);
+}
+
 HAL_StatusTypeDef LPS22HH_ReadDevice(SoftI2C_HandleTypeDef *handle,
                                      const LPS22HH_Device *device,
                                      float *pressure_hpa, float *temperature_c,

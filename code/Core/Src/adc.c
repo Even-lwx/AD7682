@@ -2,22 +2,20 @@
 /**
   ******************************************************************************
   * @file    adc.c
-  * @brief   This file provides code for the configuration
-  *          of the ADC instances.
+  * @brief   本文件提供 ADC 外设的配置代码。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "adc.h"
 
 /* USER CODE BEGIN 0 */
@@ -26,7 +24,7 @@
 
 ADC_HandleTypeDef hadc1;
 
-/* ADC1 init function */
+/* ADC1 初始化函数。 */
 void MX_ADC1_Init(void)
 {
 
@@ -40,7 +38,7 @@ void MX_ADC1_Init(void)
 
   /* USER CODE END ADC1_Init 1 */
 
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  /** 配置 ADC 的全局特性（时钟、分辨率、数据对齐方式和转换数量）。
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
@@ -66,7 +64,7 @@ void MX_ADC1_Init(void)
     Error_Handler();
   }
 
-  /** Configure Regular Channel
+  /** 配置常规转换通道。
   */
   sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
@@ -90,11 +88,11 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
   /* USER CODE BEGIN ADC1_MspInit 0 */
 
   /* USER CODE END ADC1_MspInit 0 */
-    /* ADC1 clock enable */
+    /* 使能 ADC1 外设时钟。 */
     __HAL_RCC_ADC_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**ADC1 GPIO Configuration
+    /** ADC1 GPIO 配置：
     PA3     ------> ADC1_IN3
     */
     GPIO_InitStruct.Pin = GPIO_PIN_3;
@@ -116,10 +114,10 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
   /* USER CODE BEGIN ADC1_MspDeInit 0 */
 
   /* USER CODE END ADC1_MspDeInit 0 */
-    /* Peripheral clock disable */
+    /* 关闭外设时钟。 */
     __HAL_RCC_ADC_CLK_DISABLE();
 
-    /**ADC1 GPIO Configuration
+    /** ADC1 GPIO 配置：
     PA3     ------> ADC1_IN3
     */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_3);

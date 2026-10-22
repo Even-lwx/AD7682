@@ -1,6 +1,7 @@
-# PCF8563 RTC
+# PCF8563 实时时钟驱动说明
 
-U9 is NXP PCF8563TS/5,118 on the shared I2C1 bus: PB11=SCL and PB12=SDA.
-The external 32.768 kHz crystal is connected to OSCI/OSCO. The fixed 7-bit
-address is 0x51. The driver provides BCD date/time read/write, clock start or
-stop, and the voltage-low flag.
+U9 为 NXP PCF8563TS/5,118，连接在共享的 I2C1 总线上：PB11 为 SCL，PB12 为 SDA。
+外部 32.768 kHz 晶振连接到 OSCI/OSCO 引脚，芯片固定的 7 位 I2C 地址为 `0x51`。
+
+驱动支持 BCD 格式的日期时间读写、RTC 振荡器启动/停止控制，以及秒寄存器 VL
+（电压过低）标志读取。

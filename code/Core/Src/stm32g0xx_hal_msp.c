@@ -2,54 +2,52 @@
 /**
   ******************************************************************************
   * @file         stm32g0xx_hal_msp.c
-  * @brief        This file provides code for the MSP Initialization
-  *               and de-Initialization codes.
+  * @brief        本文件提供 MSP 初始化和反初始化代码。
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
+  * 版权所有，保留所有权利。
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * 本软件遵循工程根目录 LICENSE 文件中的条款授权。
+  * 如果工程未附带 LICENSE 文件，则按“现状”提供。
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含。 */
 #include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
+/* 私有类型定义。 */
 /* USER CODE BEGIN TD */
 
 /* USER CODE END TD */
 
-/* Private define ------------------------------------------------------------*/
+/* 私有宏定义。 */
 /* USER CODE BEGIN Define */
 
 /* USER CODE END Define */
 
-/* Private macro -------------------------------------------------------------*/
+/* 私有宏。 */
 /* USER CODE BEGIN Macro */
 
 /* USER CODE END Macro */
 
-/* Private variables ---------------------------------------------------------*/
+/* 私有变量。 */
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
+/* 私有函数声明。 */
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
-/* External functions --------------------------------------------------------*/
+/* 外部函数。 */
 /* USER CODE BEGIN ExternalFunctions */
 
 /* USER CODE END ExternalFunctions */
@@ -58,7 +56,7 @@
 
 /* USER CODE END 0 */
 /**
-  * Initializes the Global MSP.
+  * 初始化全局 MSP。
   */
 void HAL_MspInit(void)
 {
@@ -69,7 +67,7 @@ void HAL_MspInit(void)
   __HAL_RCC_SYSCFG_CLK_ENABLE();
   __HAL_RCC_PWR_CLK_ENABLE();
 
-  /* System interrupt init*/
+  /* 系统中断初始化。 */
 
   /* USER CODE BEGIN MspInit 1 */
 

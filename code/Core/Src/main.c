@@ -40,6 +40,12 @@
 #define SENSOR_INVALID_FLOAT (-9999.0f)
 #define SENSOR_INVALID_ADC   0xFFFFU
 #define PRESSURE_AVG_WINDOW  50U
+#define ADC_DIAG_ROWS        96U
+#define ADC_DIAG_FIRST_PHASE 29U
+#define ADC_DIAG_PHASES      40U /* Exclusive end; this run uses phases 29..39. */
+#define ADC_DIAG_BLOCKS      3U
+#define ADC_DIAG_PERIOD_US   20000U
+#define ADC_FILTER_WINDOW    100U
 
 /* USER CODE END Includes */
 
@@ -52,6 +58,26 @@ typedef struct
   uint16_t count;
   uint16_t next;
 } PressureAverage;
+
+typedef struct
+{
+  uint32_t first_cnv_us;
+  uint16_t offsets_us[4];
+  uint16_t samples[5];
+  uint16_t status;
+} AdcDiagRow;
+
+typedef struct
+{
+  uint16_t values[ADC_FILTER_WINDOW];
+  uint16_t sorted[ADC_FILTER_WINDOW];
+  uint32_t mean_values[25]; /* Twice the median, preserving half-code values. */
+  uint32_t mean_sum;
+  uint8_t count;
+  uint8_t next;
+  uint8_t mean_count;
+  uint8_t mean_next;
+} AdcTemporalFilter;
 
 /* USER CODE END PTD */
 
@@ -79,6 +105,11 @@ volatile uint32_t g_record_timer_seconds;
 volatile uint16_t g_sensor_timer_milliseconds;
 volatile uint16_t g_sensor_sample_elapsed_ms;
 volatile uint8_t g_sensor_sample_request;
+/* ADC 正常采样由 TIM3 每 10 ms 触发；诊断期间保持关闭。 */
+volatile uint8_t g_adc_normal_enabled;
+volatile float g_adc_filtered_codes[4];
+volatile uint16_t g_adc_raw_codes[4];
+volatile AD7682_Status g_adc_normal_status;
 static uint32_t g_record_last_second;
 static uint32_t g_dump_remaining;
 static uint32_t g_dump_sequence;
@@ -92,6 +123,37 @@ static AD7682_Status g_adc_status = AD7682_ERROR;
 static uint8_t g_w25q_ready;
 static PressureAverage g_u7_pressure_average;
 static PressureAverage g_u11_pressure_average;
+/* Diagnostic capture and normal filtering never run simultaneously. Reuse
+ * their RAM so four 100-point filters fit in the STM32G031's 8 KiB SRAM. */
+static union
+{
+  AdcDiagRow diagnostic[ADC_DIAG_ROWS];
+  AdcTemporalFilter filters[4];
+} g_adc_workspace;
+#define g_adc_diag_rows (g_adc_workspace.diagnostic)
+#define g_adc_temporal_filters (g_adc_workspace.filters)
+static uint8_t g_adc_diag_active;
+static uint8_t g_adc_diag_auto_channels;
+static uint8_t g_adc_diag_channel;
+static uint8_t g_adc_diag_phase;
+static uint8_t g_adc_diag_block;
+static uint8_t g_adc_diag_edge_status;
+static uint16_t g_adc_diag_count;
+static uint8_t g_adc_diag_phase_ready;
+static uint32_t g_adc_diag_phase_start_us;
+static uint32_t g_adc_diag_next_us;
+static uint32_t g_adc_diag_systick_ctrl;
+static uint32_t g_adc_diag_timer_dier;
+static uint32_t g_adc_diag_record_seconds;
+static uint16_t g_adc_diag_record_ms;
+static volatile uint32_t g_adc_diag_cpu_probe = 1U;
+static uint8_t g_adc_diag_clock_status;
+static uint8_t g_adc_diag_lps_status;
+static uint8_t g_adc_diag_lps_saved;
+static uint8_t g_adc_diag_lps_ctrl[2];
+static uint8_t g_adc_diag_lps_readback[2];
+static DataLogger_Sample g_pending_record;
+static volatile uint8_t g_record_due;
 
 /* USER CODE END PV */
 
@@ -104,6 +166,13 @@ static void Samples_ProcessAndOutput(void);
 static void Serial_DumpLogs(void);
 static void RecordTimer_Init(void);
 static uint8_t SensorSample_ConsumeRequest(void);
+static void AdcDiag_ProcessRequest(void);
+static void AdcDiag_DumpPhase(uint8_t phase);
+static void AdcDiag_StartPhase(void);
+static void AdcDiag_StopPhase(void);
+static uint8_t AdcDiag_SetCoreClock(uint8_t mode);
+static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask);
+static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask);
 static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_RecoverReceive(void);
@@ -111,6 +180,11 @@ static void BatteryLed_Update(float voltage);
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity);
 static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa);
 static uint8_t Pressure_IsValid(float pressure_hpa);
+static void RecordCaptureDue(void);
+static void RecordWritePending(void);
+void Application_AdcSample100Hz(void);
+static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample);
+static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4]);
 
 /* USER CODE END PFP */
 
@@ -163,6 +237,27 @@ int main(void)
   __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
   huart1.ErrorCode = HAL_UART_ERROR_NONE;
   (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
+  /* 上电直接进入正常采样和日志流程，不再自动执行诊断阶段。 */
+  g_adc_diag_channel = 0U;
+  g_adc_diag_phase = 0U;
+  g_adc_diag_count = 0U;
+  g_adc_diag_phase_ready = 0U;
+  g_adc_diag_auto_channels = 0U;
+  g_adc_diag_active = 0U;
+  g_adc_normal_enabled = 1U;
+  g_adc_normal_status = AD7682_ERROR;
+  memset(g_adc_temporal_filters, 0, sizeof(g_adc_temporal_filters));
+  memset((void *)g_adc_filtered_codes, 0, sizeof(g_adc_filtered_codes));
+  memset((void *)g_adc_raw_codes, 0, sizeof(g_adc_raw_codes));
+  g_record_due = 0U;
+  g_sensor_sample_elapsed_ms = 0U;
+  g_sensor_sample_request = 0U;
+  g_record_last_second = g_record_timer_seconds;
+  g_ad7682.acquisition_delay_us = 100U;
+  g_ad7682.configured_channel_valid = 0U;
+  TIM3->CNT = 0U;
+  TIM3->SR = 0U;
+  TIM3->CR1 = TIM_CR1_CEN;
 
   /* USER CODE END 2 */
 
@@ -170,14 +265,21 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    /* 仅显式发送 adcdiag 命令后执行；上电不会进入此分支。 */
+    if (g_adc_diag_active != 0U)
+    {
+      AdcDiag_ProcessRequest();
+      continue;
+    }
+    RecordWritePending();
     Serial_ProcessCommand();
-    /* 由 TIM14 周期中断触发采样；耗时的 I2C/SPI 事务不在中断中执行。 */
-    if (SensorSample_ConsumeRequest() != 0U)
+    if (SensorSample_ConsumeRequest() != 0U && g_adc_diag_active == 0U)
     {
       /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
       Samples_ProcessAndOutput();
     }
-    Serial_DumpLogs();
+    RecordWritePending();
+    if (g_adc_diag_active == 0U) { Serial_DumpLogs(); }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -241,11 +343,25 @@ static void Serial_Write(const char *text)
 /* TIM14 内部时钟，无外部引脚。APB 分频为 1 时 TIMCLK=PCLK，
  * 否则 TIMCLK=2*PCLK；分频至 10 kHz，每 10 个计数产生一次 1 ms
  * 中断。中断同时维护记录秒计数，并按 SENSOR_SAMPLE_PERIOD_MS 置位
- * 采样请求。I2C/SPI 和串口发送全部留在主循环，避免在 ISR 中阻塞。 */
+ * 其他传感器请求。ADC 单独使用 TIM3，I2C/SPI2/串口留在主循环。 */
 static void RecordTimer_Init(void)
 {
   uint32_t clock = HAL_RCC_GetPCLK1Freq();
   if ((RCC->CFGR & RCC_CFGR_PPRE) != 0U) { clock *= 2U; }
+  /* TIM3 是 ADC 的独立 100 Hz 触发源，避免被传感器、串口或 Flash
+   * 处理节奏带偏。它只产生中断，实际四路 SPI 采样在对应 ISR 中完成。 */
+  __HAL_RCC_TIM3_CLK_ENABLE();
+  TIM3->CR1 = 0U;
+  TIM3->PSC = clock / 1000000U - 1U;
+  TIM3->ARR = 9999U;
+  TIM3->EGR = TIM_EGR_UG;
+  TIM3->SR = 0U;
+  TIM3->DIER = TIM_DIER_UIE;
+  HAL_NVIC_SetPriority(TIM3_IRQn, 2U, 0U);
+  HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+  /* Start only after diagnostics, so its IRQ does not contaminate tests. */
+
   __HAL_RCC_TIM14_CLK_ENABLE();
   TIM14->CR1 = 0U;
   TIM14->PSC = clock / 10000U - 1U;
@@ -257,11 +373,15 @@ static void RecordTimer_Init(void)
   g_sensor_sample_elapsed_ms = 0U;
   g_sensor_sample_request = 0U;
   g_record_last_second = 0U;
+  g_record_due = 0U;
   TIM14->DIER = TIM_DIER_UIE;
-  HAL_NVIC_SetPriority(TIM14_IRQn, 2U, 0U);
+  HAL_NVIC_SetPriority(TIM14_IRQn, 0U, 0U);
   HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
   HAL_NVIC_EnableIRQ(TIM14_IRQn);
   TIM14->CR1 = TIM_CR1_CEN;
+  /* SysTick must be able to preempt the ~1.7 ms ADC scan; otherwise multiple
+   * 1 ms ticks merge, slowing HAL timeouts and SHT41 conversion waits. */
+  HAL_NVIC_SetPriority(SysTick_IRQn, 0U, 0U);
 }
 
 /* 原子地取出一次定时器产生的采样请求。若一次采集超过周期，
@@ -277,6 +397,516 @@ static uint8_t SensorSample_ConsumeRequest(void)
   g_sensor_sample_request = 0U;
   __set_PRIMASK(primask);
   return request;
+}
+
+/* Only used between diagnostic captures, with TIM3 stopped.
+ * Modes: 0=PLL 64 MHz, 1=PLL/AHB2 32 MHz, 2=HSI 16 MHz + PLL on,
+ * 3=HSI 16 MHz + PLL off. HSI itself must remain on in every mode.
+ * HAL recalibrates SysTick; explicitly recalibrate the three hardware timers
+ * and UART. TIM2 resets only at phase boundaries, before any timestamps exist.
+ * Status bits: RCC=1, UART init=2, RX arm=4, SPI2 init=8, PLL=16. */
+static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
+{
+  RCC_ClkInitTypeDef clocks = {0};
+  RCC_OscInitTypeDef osc = {0};
+  uint32_t target = mode >= 2U ? 16000000U : mode == 1U ? 32000000U : 64000000U;
+  uint32_t timer_clock;
+  uint32_t timer_enabled;
+  uint32_t primask;
+  uint8_t status = 0U;
+
+  if (HAL_RCC_GetHCLKFreq() == target &&
+      __HAL_RCC_GET_SYSCLK_SOURCE() == (mode >= 2U ? RCC_SYSCLKSOURCE_STATUS_HSI :
+                                                                   RCC_SYSCLKSOURCE_STATUS_PLLCLK) &&
+      ((RCC->CR & RCC_CR_PLLRDY) != 0U) == (mode != 3U)) { return 0U; }
+  (void)HAL_UART_AbortReceive(&huart1);
+  HAL_NVIC_DisableIRQ(USART1_IRQn);
+  primask = __get_PRIMASK();
+  __disable_irq();
+  timer_enabled = TIM14->CR1 & TIM_CR1_CEN;
+  TIM14->CR1 &= (uint32_t)~TIM_CR1_CEN;
+  TIM2->CR1 = 0U;
+  __set_PRIMASK(primask);
+  /* Oscillator readiness waits must run with SysTick IRQ enabled, so HAL
+   * timeouts remain bounded even if a clock does not become ready. PLL OFF
+   * clears its source selection in this HAL: explicitly restore all boot
+   * PLL parameters instead of reading the cleared configuration back. */
+  osc.PLL.PLLState = RCC_PLL_ON;
+  osc.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  osc.PLL.PLLM = RCC_PLLM_DIV1;
+  osc.PLL.PLLN = 8U;
+  osc.PLL.PLLP = RCC_PLLP_DIV2;
+  osc.PLL.PLLQ = RCC_PLLQ_DIV2;
+  osc.PLL.PLLR = RCC_PLLR_DIV2;
+  if (mode != 3U && (RCC->CR & RCC_CR_PLLRDY) == 0U)
+  {
+    if (HAL_RCC_OscConfig(&osc) != HAL_OK) { status |= 16U; }
+  }
+  clocks.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_SYSCLK;
+  clocks.SYSCLKSource = mode >= 2U ? RCC_SYSCLKSOURCE_HSI : RCC_SYSCLKSOURCE_PLLCLK;
+  clocks.AHBCLKDivider = mode == 1U ? RCC_SYSCLK_DIV2 : RCC_SYSCLK_DIV1;
+  clocks.APB1CLKDivider = RCC_HCLK_DIV1;
+  /* Keep two Flash wait states at all speeds. */
+  if (HAL_RCC_ClockConfig(&clocks, FLASH_LATENCY_2) != HAL_OK) { status |= 1U; }
+  if (HAL_RCC_GetHCLKFreq() != target) { status |= 1U; }
+  if (mode == 3U)
+  {
+    /* Never stop PLL until HSI is confirmed as the CPU clock source. */
+    if (__HAL_RCC_GET_SYSCLK_SOURCE() == RCC_SYSCLKSOURCE_STATUS_HSI)
+    {
+      osc.PLL.PLLState = RCC_PLL_OFF;
+      if (HAL_RCC_OscConfig(&osc) != HAL_OK) { status |= 16U; }
+    }
+    else { status |= 16U; }
+  }
+  if (((RCC->CR & RCC_CR_PLLRDY) != 0U) != (mode != 3U)) { status |= 16U; }
+  timer_clock = HAL_RCC_GetPCLK1Freq();
+  if ((RCC->CFGR & RCC_CFGR_PPRE) != 0U) { timer_clock *= 2U; }
+  __disable_irq();
+  TIM2->PSC = timer_clock / 1000000U - 1U;
+  TIM2->EGR = TIM_EGR_UG;
+  TIM2->SR = 0U;
+  TIM2->CNT = 0U;
+  TIM2->CR1 = TIM_CR1_CEN;
+  TIM3->PSC = timer_clock / 1000000U - 1U;
+  TIM3->EGR = TIM_EGR_UG;
+  TIM3->CNT = 0U;
+  TIM3->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+  TIM14->PSC = timer_clock / 10000U - 1U;
+  TIM14->EGR = TIM_EGR_UG;
+  TIM14->CNT = 0U;
+  TIM14->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+  TIM14->CR1 |= timer_enabled;
+  __set_PRIMASK(primask);
+
+  /* USART1 is clocked by PCLK1. Recompute BRR before sending metadata;
+   * never transmit using the previous clock's baud divisor. */
+  if (HAL_UART_Init(&huart1) != HAL_OK) { status |= 2U; }
+  __HAL_UART_CLEAR_FLAG(&huart1, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                  UART_CLEAR_PEF | UART_CLEAR_FEF);
+  __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
+  HAL_NVIC_ClearPendingIRQ(USART1_IRQn);
+  HAL_NVIC_EnableIRQ(USART1_IRQn);
+  if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U) != HAL_OK)
+  { status |= 4U; }
+  hspi2.Init.BaudRatePrescaler = HAL_RCC_GetPCLK1Freq() == 16000000U ?
+                               SPI_BAUDRATEPRESCALER_8 :
+                               HAL_RCC_GetPCLK1Freq() == 32000000U ?
+                               SPI_BAUDRATEPRESCALER_16 : SPI_BAUDRATEPRESCALER_32;
+  if (HAL_SPI_Init(&hspi2) != HAL_OK) { status |= 8U; }
+  return status;
+}
+
+/* LPS22HH datasheet Rev 2 p43: CTRL_REG1(10h) ODR[6:4]=000 stops
+ * autonomous conversions, preserving other control bits and I2C access.
+ * Save each original register once per diagnostic run, and verify every
+ * write. Bit0/1 of the result identify U7/U11 setup or readback failure.
+ * Always call on 64 MHz, since software I2C delays use CPU cycles. */
+static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask)
+{
+  const LPS22HH_Device *devices[2] = { &g_lps22hh_u7, &g_lps22hh_u11 };
+  uint8_t i;
+  uint8_t result = 0U;
+  if (HAL_RCC_GetHCLKFreq() != 64000000U) { return 3U; }
+  for (i = 0U; i < 2U; i++)
+  {
+    uint8_t bit = (uint8_t)(1U << i);
+    uint8_t desired;
+    g_adc_diag_lps_readback[i] = 0xFFU;
+    if ((g_adc_diag_lps_saved & bit) == 0U)
+    {
+      if (SoftI2C_MemRead(&hi2c1, devices[i]->address, 0x10U,
+                         &g_adc_diag_lps_ctrl[i], 1U, BOOT_INIT_TIMEOUT) != HAL_OK)
+      { result |= bit; continue; }
+      g_adc_diag_lps_saved |= bit;
+    }
+    desired = g_adc_diag_lps_ctrl[i];
+    if ((power_down_mask & bit) != 0U) { desired &= (uint8_t)~0x70U; }
+    if (LPS22HH_RestoreCtrlReg1(&hi2c1, devices[i], desired, BOOT_INIT_TIMEOUT) != HAL_OK ||
+        SoftI2C_MemRead(&hi2c1, devices[i]->address, 0x10U,
+                       &g_adc_diag_lps_readback[i], 1U, BOOT_INIT_TIMEOUT) != HAL_OK ||
+        g_adc_diag_lps_readback[i] != desired)
+    { result |= bit; }
+  }
+  return result;
+}
+
+/* Only change OSPEEDR fields for PA1=SCK, PA7=DIN and PA5=CNV.
+ * Never reinitialize GPIO mode/AF or touch PA6 (ADC drives SDO/MISO).
+ * STM32G0 HAL LOW=00, HIGH=10. No output level or clock rate changes here.
+ * high_mask: bit0=SCK, bit1=DIN, bit2=CNV. Called outside capture only. */
+static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask)
+{
+  const uint32_t mask = (3UL << 2U) | (3UL << 14U) | (3UL << 10U);
+  uint32_t desired = ((high_mask & 1U) != 0U ? GPIO_SPEED_FREQ_HIGH << 2U : 0U) |
+                     ((high_mask & 2U) != 0U ? GPIO_SPEED_FREQ_HIGH << 14U : 0U) |
+                     ((high_mask & 4U) != 0U ? GPIO_SPEED_FREQ_HIGH << 10U : 0U);
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  MODIFY_REG(GPIOA->OSPEEDR, mask, desired);
+  __DSB();
+  __set_PRIMASK(primask);
+  return (GPIOA->OSPEEDR & mask) == desired ? 0U : 1U;
+}
+
+static void AdcDiag_DumpPhase(uint8_t phase)
+{
+  char line[176];
+  unsigned tag = (unsigned)g_adc_diag_channel * 100U + phase;
+  uint16_t i;
+
+  for (i = 0U; i < g_adc_diag_count; i++)
+  {
+    AdcDiagRow *row = &g_adc_diag_rows[i];
+    (void)snprintf(line, sizeof(line),
+                   "ADC:%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n", tag,
+                   (unsigned long)row->first_cnv_us,
+                   (unsigned)row->samples[0], (unsigned)row->samples[1],
+                   (unsigned)row->samples[2], (unsigned)row->samples[3],
+                   (unsigned)row->samples[4],
+                   (unsigned)row->offsets_us[0], (unsigned)row->offsets_us[1],
+                   (unsigned)row->offsets_us[2], (unsigned)row->offsets_us[3],
+                   (unsigned)row->status);
+    Serial_Write(line);
+  }
+}
+
+/* Finite automatic comparisons on IN0 followed by IN1.
+ * 0:基准  1:SysTick IRQ 关  2:TIM14 IRQ 关  3:两者 IRQ 关
+ * 4:SPI 1 MHz  5:SPI 4 MHz  6:等待 100 us  7:等待 1000 us
+ * 8:触发周期 17/23 ms 交替（均值 20 ms）  9:重复基准。
+ * 10: 3000 us acquisition wait, exposing pulse duration across conversions.
+ * 11: WFI between groups (SysTick remains enabled); ADC code is unchanged.
+ * 12: integer arithmetic between groups, unchanged ADC/SPI timing.
+ * 13: 10 ms group trigger, otherwise baseline 500 us/2 MHz.
+ * 14: repeat baseline after new comparisons to detect slow baseline drift.
+ * 15/16/17: 64/32/64 MHz core/bus, same 2 MHz SPI and 500 us wait.
+ * 18:baseline, 19:U7 powerdown, 20:U11 powerdown, 21:both powerdown,
+ * 22:baseline, 23:HSI16 PLLon, 24:HSI16 PLLoff, 25:HSI16 PLLon, 26:baseline,
+ * 27:HSI16 PLLoff + both LPS powerdown, 28:baseline. */
+static void AdcDiag_StartPhase(void)
+{
+  char line[176];
+  uint16_t discarded;
+  uint32_t primask;
+  uint32_t spi_hz = 2000000U;
+  uint32_t group_us = g_adc_diag_phase == 13U ? 10000U : ADC_DIAG_PERIOD_US;
+  uint8_t systick_off = g_adc_diag_phase == 1U || g_adc_diag_phase == 3U;
+  uint8_t tim14_off = g_adc_diag_phase == 2U || g_adc_diag_phase == 3U;
+  uint8_t clock_mode = g_adc_diag_phase == 16U ? 1U :
+                       (g_adc_diag_phase == 24U || g_adc_diag_phase == 27U) ? 3U :
+                       (g_adc_diag_phase == 23U || g_adc_diag_phase == 25U) ? 2U : 0U;
+  uint8_t lps_mask = g_adc_diag_phase == 19U ? 1U :
+                     g_adc_diag_phase == 20U ? 2U :
+                     (g_adc_diag_phase == 21U || g_adc_diag_phase == 27U) ? 3U : 0U;
+  uint8_t edge_mask = g_adc_diag_phase == 30U ? 1U :
+                      g_adc_diag_phase == 32U ? 2U :
+                      g_adc_diag_phase == 34U ? 4U :
+                      g_adc_diag_phase == 36U ? 3U :
+                      g_adc_diag_phase == 38U ? 7U : 0U;
+  HAL_StatusTypeDef spi_status;
+
+  /* Apply sensor controls before slowing the CPU. All bus transactions occur
+   * outside capture, and a settling delay excludes the switching transient. */
+  g_adc_diag_lps_status = (g_adc_diag_phase >= 18U && g_adc_diag_phase < 29U) ?
+                         AdcDiag_SetLpsMode(lps_mask) : 0U;
+  g_adc_diag_clock_status = AdcDiag_SetCoreClock(clock_mode);
+  hspi1.Init.BaudRatePrescaler = HAL_RCC_GetPCLK1Freq() == 16000000U ?
+                               SPI_BAUDRATEPRESCALER_8 :
+                               HAL_RCC_GetPCLK1Freq() == 32000000U ?
+                               SPI_BAUDRATEPRESCALER_16 : SPI_BAUDRATEPRESCALER_32;
+  if (g_adc_diag_phase == 4U)
+  {
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+    spi_hz = 1000000U;
+  }
+  else if (g_adc_diag_phase == 5U)
+  {
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+    spi_hz = 4000000U;
+  }
+  spi_status = HAL_SPI_Init(&hspi1);
+  /* Apply after SPI init, so even an MSP reinitialization cannot overwrite
+   * the requested edge setting. Warm-up/config and capture use this setting. */
+  g_adc_diag_edge_status = AdcDiag_SetEdgeSpeed(edge_mask);
+  g_ad7682.acquisition_delay_us = AD7682_ACQUISITION_DELAY_US;
+  if (g_adc_diag_phase == 6U) { g_ad7682.acquisition_delay_us = 100U; }
+  if (g_adc_diag_phase == 7U) { g_ad7682.acquisition_delay_us = 1000U; }
+  if (g_adc_diag_phase == 10U) { g_ad7682.acquisition_delay_us = 3000U; }
+  g_ad7682.configured_channel_valid = 0U;
+  g_adc_status = AD7682_ReadChannel(&g_ad7682, g_adc_diag_channel,
+                                    &discarded, 10U);
+  (void)snprintf(line, sizeof(line),
+                 "ADC:991,%u,%lu,%lu,%u,%u,%lu,%u,%u,%u,%lu,%u\r\n",
+                 (unsigned)g_adc_diag_channel * 100U + g_adc_diag_phase,
+                 (unsigned long)g_ad7682.acquisition_delay_us,
+                 (unsigned long)spi_hz, (unsigned)systick_off,
+                 (unsigned)tim14_off, (unsigned long)group_us,
+                 (unsigned)spi_status, (unsigned)g_adc_status,
+                 (unsigned)(g_adc_diag_phase == 11U ? 1U :
+                            g_adc_diag_phase == 12U ? 2U : 0U),
+                 (unsigned long)HAL_RCC_GetHCLKFreq(),
+                 (unsigned)g_adc_diag_clock_status);
+  Serial_Write(line);
+  if (g_adc_diag_phase >= 18U && g_adc_diag_phase < 29U)
+  {
+    (void)snprintf(line, sizeof(line), "ADC:993,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u\r\n",
+                   (unsigned)g_adc_diag_channel * 100U + g_adc_diag_phase,
+                   (unsigned)lps_mask, (unsigned)g_adc_diag_lps_status,
+                   (unsigned)g_adc_diag_lps_readback[0],
+                   (unsigned)g_adc_diag_lps_readback[1],
+                   (unsigned)g_adc_diag_lps_ctrl[0], (unsigned)g_adc_diag_lps_ctrl[1],
+                   (unsigned)clock_mode, (unsigned)((RCC->CR & RCC_CR_PLLRDY) != 0U),
+                   (unsigned long)HAL_RCC_GetHCLKFreq(),
+                   (unsigned)(__HAL_RCC_GET_SYSCLK_SOURCE() == RCC_SYSCLKSOURCE_STATUS_HSI));
+    Serial_Write(line);
+  }
+  if (g_adc_diag_phase >= ADC_DIAG_FIRST_PHASE)
+  {
+    (void)snprintf(line, sizeof(line), "ADC:995,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%u\r\n",
+                   (unsigned)g_adc_diag_channel * 100U + g_adc_diag_phase,
+                   (unsigned)g_adc_diag_block + 1U, (unsigned)ADC_DIAG_BLOCKS,
+                   (unsigned)edge_mask,
+                   (unsigned)((GPIOA->OSPEEDR >> 2U) & 3U),
+                   (unsigned)((GPIOA->OSPEEDR >> 14U) & 3U),
+                   (unsigned)((GPIOA->OSPEEDR >> 10U) & 3U),
+                   (unsigned long)HAL_RCC_GetHCLKFreq(),
+                   (unsigned long)spi_hz, (unsigned long)group_us,
+                   (unsigned)g_adc_diag_edge_status);
+    Serial_Write(line);
+  }
+  HAL_Delay(g_adc_diag_phase >= 18U ? 250U : 50U);
+
+  primask = __get_PRIMASK();
+  __disable_irq();
+  g_adc_diag_systick_ctrl = SysTick->CTRL;
+  g_adc_diag_timer_dier = TIM14->DIER;
+  g_adc_diag_record_seconds = g_record_timer_seconds;
+  g_adc_diag_record_ms = g_sensor_timer_milliseconds;
+  g_adc_diag_phase_start_us = AD7682_TimeUs();
+  if (systick_off != 0U)
+  {
+    SysTick->CTRL &= (uint32_t)~SysTick_CTRL_TICKINT_Msk;
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+  }
+  if (tim14_off != 0U)
+  {
+    TIM14->DIER &= (uint32_t)~TIM_DIER_UIE;
+    HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+  }
+  __set_PRIMASK(primask);
+  g_adc_diag_next_us = g_adc_diag_phase_start_us + group_us;
+  g_adc_diag_phase_ready = 1U;
+}
+
+/* 测试结束先恢复中断与时间基准，再输出缓冲数据。
+ * 补偿只用于 HAL/记录时间（毫秒量级），分析用的 CNV 时间全部来自 TIM2。 */
+static void AdcDiag_StopPhase(void)
+{
+  uint32_t primask = __get_PRIMASK();
+  uint32_t elapsed_ms;
+  uint32_t ms;
+  __disable_irq();
+  elapsed_ms = (uint32_t)(AD7682_TimeUs() - g_adc_diag_phase_start_us) / 1000U;
+  if (g_adc_diag_phase == 1U || g_adc_diag_phase == 3U)
+  {
+    ms = elapsed_ms;
+    while (ms-- != 0U) { HAL_IncTick(); }
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+    SysTick->CTRL = g_adc_diag_systick_ctrl;
+  }
+  if (g_adc_diag_phase == 2U || g_adc_diag_phase == 3U)
+  {
+    ms = (uint32_t)g_adc_diag_record_ms + elapsed_ms;
+    g_record_timer_seconds = g_adc_diag_record_seconds + ms / 1000U;
+    g_sensor_timer_milliseconds = (uint16_t)(ms % 1000U);
+    TIM14->SR &= (uint32_t)~TIM_SR_UIF;
+    HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+    TIM14->DIER = g_adc_diag_timer_dier;
+  }
+  g_sensor_sample_request = 0U;
+  g_sensor_sample_elapsed_ms = 0U;
+  __set_PRIMASK(primask);
+  g_adc_diag_phase_ready = 0U;
+  if (g_adc_diag_phase >= ADC_DIAG_FIRST_PHASE)
+  {
+    char line[112];
+    uint8_t edge_restore = AdcDiag_SetEdgeSpeed(0U);
+    uint16_t i;
+    if (edge_restore != 0U)
+    {
+      for (i = 0U; i < g_adc_diag_count; i++)
+      { g_adc_diag_rows[i].status |= 0x1000U; }
+    }
+    (void)snprintf(line, sizeof(line), "ADC:996,%u,%u,%u,%u,%u,%u,%lu,0,0,0,0\r\n",
+                   (unsigned)g_adc_diag_channel * 100U + g_adc_diag_phase,
+                   (unsigned)g_adc_diag_block + 1U, (unsigned)edge_restore,
+                   (unsigned)((GPIOA->OSPEEDR >> 2U) & 3U),
+                   (unsigned)((GPIOA->OSPEEDR >> 14U) & 3U),
+                   (unsigned)((GPIOA->OSPEEDR >> 10U) & 3U),
+                   (unsigned long)HAL_RCC_GetHCLKFreq());
+    Serial_Write(line);
+  }
+  /* Restore before buffered output, and before the next phase/normal mode.
+   * All capture timestamps have already been saved in the row buffer. */
+  {
+    uint8_t restore_status = 0U;
+    uint8_t lps_restore = 0U;
+    uint8_t retry;
+    uint16_t i;
+    for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+    {
+      uint8_t attempt = AdcDiag_SetCoreClock(0U);
+      restore_status |= attempt;
+      if (attempt == 0U && HAL_RCC_GetHCLKFreq() == 64000000U) { break; }
+    }
+    if (g_adc_diag_phase >= 18U && g_adc_diag_phase < 29U)
+    {
+      for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
+      {
+        lps_restore = AdcDiag_SetLpsMode(0U);
+        if (lps_restore == 0U) { break; }
+      }
+      {
+        char line[96];
+        (void)snprintf(line, sizeof(line), "ADC:994,%u,%u,%u,%u,%u,%lu,0,0,0,0,0\r\n",
+                       (unsigned)g_adc_diag_channel * 100U + g_adc_diag_phase,
+                       (unsigned)restore_status, (unsigned)lps_restore,
+                       (unsigned)g_adc_diag_lps_readback[0], (unsigned)g_adc_diag_lps_readback[1],
+                       (unsigned long)HAL_RCC_GetHCLKFreq());
+        Serial_Write(line);
+      }
+    }
+    if (lps_restore != 0U)
+    {
+      for (i = 0U; i < g_adc_diag_count; i++)
+      { g_adc_diag_rows[i].status |= 0x800U; }
+    }
+    if (restore_status != 0U || HAL_RCC_GetHCLKFreq() != 64000000U)
+    {
+      for (i = 0U; i < g_adc_diag_count; i++)
+      { g_adc_diag_rows[i].status |= 0x400U; }
+    }
+  }
+}
+
+static void AdcDiag_ProcessRequest(void)
+{
+  uint16_t samples[5];
+  uint32_t times[5];
+  uint32_t now;
+  uint32_t next_period;
+  uint8_t i;
+  AdcDiagRow *row;
+
+  if (g_adc_diag_phase_ready == 0U) { AdcDiag_StartPhase(); }
+  now = AD7682_TimeUs();
+  if ((int32_t)(now - g_adc_diag_next_us) < 0)
+  {
+    /* Only alter inter-group activity, never the ADC transfer itself.
+     * WFI wakes at least every 1 ms; final 2 ms use polling for an accurate
+     * trigger deadline. The active workload is short and similarly bounded. */
+    if ((uint32_t)(g_adc_diag_next_us - now) > 2000U)
+    {
+      if (g_adc_diag_phase == 11U) { __DSB(); __WFI(); }
+      else if (g_adc_diag_phase == 12U)
+      {
+        g_adc_diag_cpu_probe = g_adc_diag_cpu_probe * 1664525U + 1013904223U;
+      }
+    }
+    return;
+  }
+  row = &g_adc_diag_rows[g_adc_diag_count];
+  row->status = (uint32_t)(now - g_adc_diag_next_us) > 100U ? 0x100U : 0U;
+  if (g_adc_diag_clock_status != 0U) { row->status |= 0x400U; }
+  if (g_adc_diag_lps_status != 0U) { row->status |= 0x800U; }
+  if (g_adc_diag_edge_status != 0U) { row->status |= 0x1000U; }
+  g_adc_status = AD7682_ReadChannelTimedSamples(&g_ad7682, g_adc_diag_channel,
+                                                samples, times, 10U);
+  row->status |= (uint16_t)g_adc_status;
+  row->first_cnv_us = (g_adc_status == AD7682_OK ? times[0] : now) -
+                      g_adc_diag_phase_start_us;
+  for (i = 0U; i < 5U; i++)
+  {
+    row->samples[i] = g_adc_status == AD7682_OK ? samples[i] : SENSOR_INVALID_ADC;
+    if (i != 0U)
+    {
+      uint32_t offset = g_adc_status == AD7682_OK ? times[i] - times[0] : 0U;
+      if (offset > 65535U) { row->status |= 0x200U; }
+      row->offsets_us[i - 1U] = (uint16_t)(offset > 65535U ? 65535U : offset);
+    }
+  }
+  g_adc_diag_count++;
+  next_period = ADC_DIAG_PERIOD_US;
+  if (g_adc_diag_phase == 13U) { next_period = 10000U; }
+  if (g_adc_diag_phase == 8U)
+  {
+    next_period = (g_adc_diag_count & 1U) != 0U ? 17000U : 23000U;
+  }
+  g_adc_diag_next_us += next_period;
+  /* 发生异常超时则放弃追赶，不把多个过期请求挤在一起。 */
+  now = AD7682_TimeUs();
+  if ((int32_t)(now - g_adc_diag_next_us) >= 0)
+  {
+    row->status |= 0x100U;
+    g_adc_diag_next_us = now + next_period;
+  }
+
+  if (g_adc_diag_count >= ADC_DIAG_ROWS)
+  {
+    AdcDiag_StopPhase();
+    AdcDiag_DumpPhase(g_adc_diag_phase);
+    g_adc_diag_count = 0U;
+    g_adc_diag_block++;
+    /* Each block is an independent capture with its own timestamp origin.
+     * Dump while sampling is stopped; do not let UART activity contaminate
+     * the next block. The 995 event identifies repeated blocks of one tag. */
+    if (g_adc_diag_block < ADC_DIAG_BLOCKS) { return; }
+    g_adc_diag_block = 0U;
+    g_adc_diag_phase++;
+    if (g_adc_diag_phase >= ADC_DIAG_PHASES)
+    {
+      if (g_adc_diag_auto_channels != 0U && g_adc_diag_channel == 0U)
+      {
+        g_adc_diag_channel = 1U;
+        g_adc_diag_phase = ADC_DIAG_FIRST_PHASE;
+        Serial_Write("ADC:992,1,0,0,0,0,0,0,0,0,0,0\r\n");
+      }
+      else
+      {
+        hspi1.Init.BaudRatePrescaler = HAL_RCC_GetPCLK1Freq() == 16000000U ?
+                                     SPI_BAUDRATEPRESCALER_8 :
+                                     HAL_RCC_GetPCLK1Freq() == 32000000U ?
+                                     SPI_BAUDRATEPRESCALER_16 : SPI_BAUDRATEPRESCALER_32;
+        (void)HAL_SPI_Init(&hspi1);
+        /* 正常模式每 10 ms 扫描一次四路；100 us 已远大于手册要求的
+         * 1.8 us 最小采集时间，并把一次四路扫描控制在约 2 ms 内。 */
+        g_ad7682.acquisition_delay_us = 100U;
+        g_ad7682.configured_channel_valid = 0U;
+        g_adc_diag_active = 0U;
+        g_adc_diag_auto_channels = 0U;
+        g_record_last_second = g_record_timer_seconds;
+        {
+          char done[96];
+          (void)snprintf(done, sizeof(done), "ADC:999,%lu,0,0,0,0,0,0,0,0,0,0\r\n",
+                         (unsigned long)HAL_RCC_GetHCLKFreq());
+          Serial_Write(done);
+        }
+        memset(g_adc_temporal_filters, 0, sizeof(g_adc_temporal_filters));
+        memset((void *)g_adc_filtered_codes, 0, sizeof(g_adc_filtered_codes));
+        memset((void *)g_adc_raw_codes, 0, sizeof(g_adc_raw_codes));
+        g_record_due = 0U;
+        g_sensor_sample_elapsed_ms = 0U;
+        g_sensor_sample_request = 0U;
+        g_adc_normal_enabled = 1U;
+        TIM3->CNT = 0U;
+        TIM3->SR = 0U;
+        TIM3->CR1 = TIM_CR1_CEN;
+      }
+    }
+  }
 }
 
 /*
@@ -309,7 +939,7 @@ static void Devices_Initialize(void)
   }
   Serial_Write(g_adc_status == AD7682_OK ? "AD7682 INIT OK\r\n" :
                                         "AD7682 INIT ERROR\r\n");
-  Serial_Write("AD7682 MULTI: 4CH, DUMMY2+5 VALID, MEDIAN5, ACQ=500us, RB=1, CFG-ONCE, SPI-QUIET\r\n");
+  Serial_Write("AD7682: 4CH 100Hz, DUMMY2+1, TEMPORAL MEDIAN100+AVG25, FILTERED LOG\r\n");
 
   Serial_Write("SHT41 INIT...\r\n");
   status = HAL_ERROR;
@@ -518,7 +1148,7 @@ static void Serial_HandleSetTime(const char *command)
 
 static void Serial_ProcessCommand(void)
 {
-  char command[64];char *trimmed;uint8_t overflow;
+  char command[64];char line[64];char *trimmed;uint8_t overflow;
   if(!g_uart_line_ready)
   {
     Serial_RecoverReceive();
@@ -533,6 +1163,31 @@ static void Serial_ProcessCommand(void)
   g_uart_line_overflow=0U;
   if(overflow){Serial_Write("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
+  if(strncmp(trimmed,"adcdiag ",8U)==0)
+  {
+    if(trimmed[8]<'0'||trimmed[8]>'3'||trimmed[9]!=0||
+       g_adc_diag_active!=0U||g_dump_remaining!=0U||g_rtc_setting_mode!=0U)
+    {
+      Serial_Write("ADC DIAG ERROR: use adcdiag 0..3 outside setting/log dump\r\n");
+      return;
+    }
+    g_adc_diag_channel=(uint8_t)(trimmed[8]-'0');
+    TIM3->CR1 = 0U;
+    g_adc_normal_enabled = 0U;
+    TIM3->SR = 0U;
+    HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+    g_adc_diag_auto_channels=0U;
+    g_adc_diag_phase=ADC_DIAG_FIRST_PHASE;
+    g_adc_diag_block=0U;
+    g_adc_diag_count=0U;
+    g_adc_diag_phase_ready=0U;
+    g_adc_diag_active=1U;
+    g_adc_diag_lps_saved=0U;
+    (void)snprintf(line, sizeof(line), "ADC:990,8,11,96,20000,%u,0,29,3,0,0,0\r\n",
+                   (unsigned)g_adc_diag_channel);
+    Serial_Write(line);
+    return;
+  }
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
   if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
@@ -617,14 +1272,14 @@ static void Serial_DumpLogs(void)
     year = (uint16_t)(sample.datetime.year +
                       ((sample.datetime.century != 0U) ? 1900U : 2000U));
     (void)snprintf(line, sizeof(line),
-                   "samples: %u,%02u,%02u,%02u,%02u,%02u,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
+                   "samples: %u,%02u,%02u,%02u,%02u,%02u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\r\n",
                    (unsigned)year, (unsigned)sample.datetime.month,
                    (unsigned)sample.datetime.day, (unsigned)sample.datetime.hours,
                    (unsigned)sample.datetime.minutes, (unsigned)sample.datetime.seconds,
                    (double)sample.temperature_c, (double)sample.humidity_rh,
                    (double)sample.pressure_u7_hpa, (double)sample.pressure_u11_hpa,
-                   (unsigned)sample.adc[0], (unsigned)sample.adc[1],
-                   (unsigned)sample.adc[2], (unsigned)sample.adc[3]);
+                   (double)sample.adc[0], (double)sample.adc[1],
+                   (double)sample.adc[2], (double)sample.adc[3]);
     Serial_Write(line);
   }
 }
@@ -674,6 +1329,170 @@ static uint8_t Pressure_IsValid(float pressure_hpa)
   return (uint8_t)(pressure_hpa > 0.0f && pressure_hpa < 2000.0f);
 }
 
+/* Across-time median rejects up to 49 contaminated points per 100 scans.
+ * Mean25 smooths only median outputs, never raw conversions. No invalid-code
+ * substitution is used for spikes; persistent real steps remain trackable. */
+static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
+{
+  uint16_t temp;
+  uint32_t median_twice;
+  uint8_t i;
+  uint8_t count;
+
+  if (filter == NULL) { return 0U; }
+  count = filter->count;
+  if (count == ADC_FILTER_WINDOW)
+  {
+    /* Remove one occurrence of the outgoing raw code from the sorted set. */
+    temp = filter->values[filter->next];
+    for (i = 0U; i < count && filter->sorted[i] != temp; i++) { }
+    for (; i + 1U < count; i++) { filter->sorted[i] = filter->sorted[i + 1U]; }
+    count--;
+  }
+  /* Maintain the sorted window in O(window), avoiding a 100x100 re-sort in
+   * the ISR. The ring stores time order; sorted[] stores the same multiset. */
+  i = count;
+  while (i > 0U && filter->sorted[i - 1U] > sample)
+  {
+    filter->sorted[i] = filter->sorted[i - 1U];
+    i--;
+  }
+  filter->sorted[i] = sample;
+  count++;
+  filter->values[filter->next] = sample;
+  filter->next = (uint8_t)((filter->next + 1U) % ADC_FILTER_WINDOW);
+  filter->count = count;
+  median_twice = (uint32_t)filter->sorted[count / 2U] * 2U;
+  if ((count & 1U) == 0U)
+  {
+    median_twice = (uint32_t)filter->sorted[count / 2U] +
+                     filter->sorted[count / 2U - 1U];
+  }
+  /* Start the smoothing mean only after one complete second of samples. */
+  if (count < ADC_FILTER_WINDOW)
+  {
+    return (float)median_twice * 0.5f;
+  }
+  if (filter->mean_count == 25U)
+  {
+    filter->mean_sum -= filter->mean_values[filter->mean_next];
+  }
+  else { filter->mean_count++; }
+  filter->mean_values[filter->mean_next] = median_twice;
+  filter->mean_sum += median_twice;
+  filter->mean_next = (uint8_t)((filter->mean_next + 1U) % 25U);
+  return (float)filter->mean_sum / (2.0f * (float)filter->mean_count);
+}
+
+/* Snapshot filtered ADC codes at the configured deadline; RTC and flash I/O
+ * remain in the main loop so they cannot stretch the 100 Hz timer period. */
+static void RecordCaptureDue(void)
+{
+  uint32_t now = g_record_timer_seconds;
+  uint32_t interval = DataLogger_GetInterval();
+  uint32_t elapsed;
+  uint8_t channel;
+  uint32_t primask;
+  if (interval == 0U || (now - g_record_last_second) < interval) { return; }
+  /* Never create initial records from zero-initialized buffers. After the
+   * first real window, SPI failures retain the last measured filtered code. */
+  for (channel = 0U; channel < 4U; channel++)
+  {
+    if (g_adc_temporal_filters[channel].count < ADC_FILTER_WINDOW) { return; }
+  }
+  elapsed = now - g_record_last_second;
+  g_record_last_second += (elapsed / interval) * interval;
+  primask = __get_PRIMASK();
+  __disable_irq();
+  for (channel = 0U; channel < 4U; channel++)
+  {
+    g_pending_record.adc[channel] = g_adc_filtered_codes[channel];
+  }
+  __set_PRIMASK(primask);
+  g_record_due = 1U;
+}
+
+/* Keep one pending record. If flash takes longer than an interval, the next
+ * deadline replaces it with the newest filtered values rather than replaying
+ * stale samples as if they were taken on time. */
+static void RecordWritePending(void)
+{
+  DataLogger_Sample sample;
+  uint32_t primask;
+  if (g_record_due == 0U || g_adc_diag_active != 0U) { return; }
+  primask = __get_PRIMASK();
+  __disable_irq();
+  if (g_record_due == 0U)
+  {
+    __set_PRIMASK(primask);
+    return;
+  }
+  sample = g_pending_record;
+  g_record_due = 0U;
+  __set_PRIMASK(primask);
+  if (PCF8563_ReadDateTime(&hi2c1, &sample.datetime, 100U) != HAL_OK)
+  {
+    memset(&sample.datetime, 0, sizeof(sample.datetime));
+  }
+  sample.temperature_c = g_sht_filter_valid ? g_sht_filtered_temperature :
+                         SENSOR_INVALID_FLOAT;
+  sample.humidity_rh = g_sht_filter_valid ? g_sht_filtered_humidity :
+                       SENSOR_INVALID_FLOAT;
+  sample.pressure_u7_hpa = g_u7_pressure_average.count != 0U ?
+      g_u7_pressure_average.sum / (float)g_u7_pressure_average.count : SENSOR_INVALID_FLOAT;
+  sample.pressure_u11_hpa = g_u11_pressure_average.count != 0U ?
+      g_u11_pressure_average.sum / (float)g_u11_pressure_average.count : SENSOR_INVALID_FLOAT;
+  if (g_w25q_ready != 0U && DataLogger_Append(&sample, 3000U) != HAL_OK &&
+      g_rtc_setting_mode != 0U)
+  {
+    Serial_Write("LOG WRITE ERROR\r\n");
+  }
+}
+
+/* 由 TIM3 ISR 调用。四路每次各执行一次有效转换；驱动在通道切换时
+ * 自动丢弃两次流水线结果。正常模式 acquisition=100 us，四路扫描
+ * 约 2 ms 以内，远小于 10 ms 周期。即使某次 SPI 失败，也保留上一次
+ * 已滤波值，保证串口和 W25Q128 永远得到有效的稳定值。 */
+void Application_AdcSample100Hz(void)
+{
+  uint16_t raw[4];
+  uint8_t channel;
+  uint8_t all_ok = 1U;
+
+  for (channel = 0U; channel < 4U; channel++)
+  {
+    raw[channel] = 0U;
+    if (AD7682_ReadChannel(&g_ad7682, channel, &raw[channel], 10U) == AD7682_OK)
+    {
+      g_adc_raw_codes[channel] = raw[channel];
+      g_adc_filtered_codes[channel] = AdcFilter_Insert(&g_adc_temporal_filters[channel],
+                                                        raw[channel]);
+    }
+    else
+    {
+      all_ok = 0U;
+    }
+  }
+      g_adc_normal_status = all_ok != 0U ? AD7682_OK : AD7682_ERROR;
+  RecordCaptureDue();
+}
+
+static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4])
+{
+  uint8_t channel;
+  uint8_t ready = 1U;
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  for (channel = 0U; channel < 4U; channel++)
+  {
+    filtered[channel] = g_adc_filtered_codes[channel];
+    raw[channel] = g_adc_raw_codes[channel];
+    if (g_adc_temporal_filters[channel].count < ADC_FILTER_WINDOW) { ready = 0U; }
+  }
+  __set_PRIMASK(primask);
+  return ready;
+}
+
 /* 按最近 50 个有效气压样本计算滑动平均。窗口尚未填满时，按当前有效
  * 样本数计算；传感器暂时失败时保留最近有效平均值。 */
 static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
@@ -702,24 +1521,14 @@ static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
 /* FireWater 实时数据行：ch0 电池电压，ch1/2 SHT41 温湿度，
  * ch3/4 U7 压力/温度，ch5/6 U11 压力/温度，随后是 AD7682 四通道的
  * 中值结果，最后为 U7 50 点平均、U11 50 点平均、
- * 两路实时平均。W25Q128 中的压力字段保存 U7/U11 各自的 50 点平均值。 */
+ * 两路实时平均，末尾追加 IN0～IN3 最新有效原始码。W25Q128 中的压力字段
+ * 保存 U7/U11 各自的 50 点平均值。 */
 /* 读取一轮所有传感器，按记录周期写 Flash，并按实时格式输出。 */
 static void Samples_ProcessAndOutput(void)
 {
   uint32_t battery_raw;
-  uint32_t now;
-  uint32_t interval;
-  uint16_t adc[4] = {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
-                     SENSOR_INVALID_ADC, SENSOR_INVALID_ADC};
-  uint16_t adc_samples[4][5] = {
-      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
-       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
-      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
-       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
-      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
-       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC},
-      {SENSOR_INVALID_ADC, SENSOR_INVALID_ADC, SENSOR_INVALID_ADC,
-       SENSOR_INVALID_ADC, SENSOR_INVALID_ADC}};
+  float adc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  uint16_t adc_raw[4] = {0U, 0U, 0U, 0U};
   float battery_voltage;
   float sht_temperature = SENSOR_INVALID_FLOAT;
   float sht_humidity = SENSOR_INVALID_FLOAT;
@@ -730,11 +1539,13 @@ static void Samples_ProcessAndOutput(void)
   float u7_pressure_average;
   float u11_pressure_average;
   float pressure_average;
-  char line[384];
-  char adc_text[128];
-  char adc_raw_text[160];
-  DataLogger_Sample log_sample;
+  char line[320];
+  char adc_text[48];
   HAL_StatusTypeDef sht_status;
+
+  /* ADC 已由 TIM3 独立以 100 Hz 更新；这里仅复制快照，绝不再发起
+     会拖慢记录周期的 SPI 采样。 */
+  (void)Application_AdcGetSnapshot(adc, adc_raw);
 
   battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
   battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
@@ -774,92 +1585,30 @@ static void Samples_ProcessAndOutput(void)
                       Pressure_IsValid(u11_pressure)) ?
                      ((u7_pressure + u11_pressure) * 0.5f) :
                      SENSOR_INVALID_FLOAT;
-  /* 多通道保守采样：切换后丢弃两次，再每通道取5次有效转换，
-     由驱动返回5个样本的中位数。 */
-  g_adc_status = AD7682_ReadFourChannelsSamples(&g_ad7682, adc_samples, 10U);
-  if (g_adc_status == AD7682_OK)
-  {
-    adc[0] = AD7682_Median5(adc_samples[0]);
-    adc[1] = AD7682_Median5(adc_samples[1]);
-    adc[2] = AD7682_Median5(adc_samples[2]);
-    adc[3] = AD7682_Median5(adc_samples[3]);
-    (void)snprintf(adc_text, sizeof(adc_text),
-                   "%u,%u,%u,%u", (unsigned)adc[0], (unsigned)adc[1],
-                   (unsigned)adc[2], (unsigned)adc[3]);
-    (void)snprintf(adc_raw_text, sizeof(adc_raw_text),
-                   "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
-                   (unsigned)adc_samples[0][0], (unsigned)adc_samples[0][1],
-                   (unsigned)adc_samples[0][2], (unsigned)adc_samples[0][3],
-                   (unsigned)adc_samples[0][4], (unsigned)adc_samples[1][0],
-                   (unsigned)adc_samples[1][1], (unsigned)adc_samples[1][2],
-                   (unsigned)adc_samples[1][3], (unsigned)adc_samples[1][4],
-                   (unsigned)adc_samples[2][0], (unsigned)adc_samples[2][1],
-                   (unsigned)adc_samples[2][2], (unsigned)adc_samples[2][3],
-                   (unsigned)adc_samples[2][4], (unsigned)adc_samples[3][0],
-                   (unsigned)adc_samples[3][1], (unsigned)adc_samples[3][2],
-                   (unsigned)adc_samples[3][3], (unsigned)adc_samples[3][4]);
-  }
-  else
-  {
-    (void)snprintf(adc_text, sizeof(adc_text),
-                   "%u,%u,%u,%u",
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC);
-    (void)snprintf(adc_raw_text, sizeof(adc_raw_text),
-                   "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC,
-                   (unsigned)SENSOR_INVALID_ADC, (unsigned)SENSOR_INVALID_ADC);
-  }
-
-  now = g_record_timer_seconds;
-  interval = DataLogger_GetInterval();
-  if ((now - g_record_last_second) >= interval)
-  {
-    (void)memset(&log_sample, 0, sizeof(log_sample));
-    (void)PCF8563_ReadDateTime(&hi2c1, &log_sample.datetime, 100U);
-    log_sample.temperature_c = sht_temperature;
-    log_sample.humidity_rh = sht_humidity;
-    /* 历史记录保存各气压计的滑动平均值，而不是单次原始读数。
-       窗口未满时由 PressureAverage_Update() 使用已有有效样本数计算。 */
-    log_sample.pressure_u7_hpa = u7_pressure_average;
-    log_sample.pressure_u11_hpa = u11_pressure_average;
-    /* 历史记录结构每个通道只保留一个 ADC 字段，使用本轮中值结果。 */
-    log_sample.adc[0] = adc[0];
-    log_sample.adc[1] = adc[1];
-    log_sample.adc[2] = adc[2];
-    log_sample.adc[3] = adc[3];
-    if ((g_w25q_ready != 0U) &&
-        DataLogger_Append(&log_sample, 3000U) != HAL_OK)
-    {
-      if (g_rtc_setting_mode) { Serial_Write("LOG WRITE ERROR\r\n"); }
-    }
-    /* 按原定时基准推进，不把采样/写入耗时累计进记录周期。
-       超时后不伪造缺失时刻的历史样本。 */
-    g_record_last_second += ((now - g_record_last_second) / interval) * interval;
-  }
+  /* Serve the timer-latched record before formatting/transmitting telemetry. */
+  RecordWritePending();
+  /* Do not print power-up zeros or partially warmed filters as measurements. */
+  if (Application_AdcGetSnapshot(adc, adc_raw) == 0U) { return; }
+  (void)snprintf(adc_text, sizeof(adc_text),
+                 "%.2f,%.2f,%.2f,%.2f", (double)adc[0], (double)adc[1],
+                 (double)adc[2], (double)adc[3]);
 
   /* 采样或 Flash 写入期间到达的命令，在下一行实时输出前处理。 */
   Serial_ProcessCommand();
-  if (g_rtc_setting_mode != 0U)
+  if (g_rtc_setting_mode != 0U || g_adc_diag_active != 0U)
   {
     return;
   }
-  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f,%s\r\n",
+  (void)snprintf(line, sizeof(line), "samples: %.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f,%u,%u,%u,%u\r\n",
                  (double)battery_voltage, (double)sht_temperature,
                  (double)sht_humidity, (double)u7_pressure,
                  (double)u7_temperature, (double)u11_pressure,
                  (double)u11_temperature, adc_text,
                  (double)u7_pressure_average,
                  (double)u11_pressure_average,
-                 (double)pressure_average, adc_raw_text);
+                 (double)pressure_average,
+                 (unsigned)adc_raw[0], (unsigned)adc_raw[1],
+                 (unsigned)adc_raw[2], (unsigned)adc_raw[3]);
   Serial_Write(line);
 }
 

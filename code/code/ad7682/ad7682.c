@@ -1,20 +1,125 @@
 #include "ad7682.h"
 
 /* 依据数据手册 Rev.B 第 24、25、28 页：单端接地参考、全带宽、
- * 外部参考源直接接 REF、关闭内部参考缓冲器和温度传感器、
+ * 使用外部 REF 参考源、关闭内部参考缓冲器和温度传感器、
  * 关闭通道序列器、关闭 CFG 回读。REF[5:3] = 110，
  * RB[0] = 1 表示不回读 CFG，基础配置值为 0x3C71。 */
 #define AD7682_CFG_BASE 0x3C71U
 #define AD7682_CHANNEL_DUMMY_CONVERSIONS 2U
 
-/* 输入端为 100 ohm + 100 pF 时 RC 约 10 ns。这里把 CNV 下降沿后、
- * 下一次转换前的采集保持时间设为 500 us，给传感器输出、输入电容和
- * 模拟地/参考电压网络更充分的稳定时间。这个时间不会延长当前转换，
- * 而是延长下一次转换开始前的采集阶段。 */
+/* STM32G031 的 TIM2 是 32 位计数器。本工程此前未使用 TIM2。
+ * 系统时钟配置完成后初始化一次，不开启中断、不配置任何输出引脚。 */
+static void AD7682_TimebaseInit(void)
+{
+    uint32_t clock = HAL_RCC_GetPCLK1Freq();
+    if ((RCC->CFGR & RCC_CFGR_PPRE) != 0U) { clock *= 2U; }
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    TIM2->CR1 = 0U;
+    TIM2->DIER = 0U;
+    TIM2->PSC = clock / 1000000U - 1U;
+    TIM2->ARR = 0xFFFFFFFFUL;
+    TIM2->EGR = TIM_EGR_UG;
+    TIM2->SR = 0U;
+    TIM2->CNT = 0U;
+    TIM2->CR1 = TIM_CR1_CEN;
+}
+
+uint32_t AD7682_TimeUs(void)
+{
+    return TIM2->CNT;
+}
+
 static void AD7682_DelayUs(uint32_t us)
 {
-    volatile uint32_t loops = (SystemCoreClock / 1000000UL) * us;
-    while (loops-- != 0U) { __NOP(); }
+    uint32_t start = AD7682_TimeUs();
+    while ((uint32_t)(AD7682_TimeUs() - start) < us) { __NOP(); }
+}
+
+/* ADC 读写时屏蔽短时中断，不能使用依赖 SysTick 的 HAL SPI 超时。
+ * SPI1 为本驱动独占的 8 位、双线主机；以 TIM2 为整个 16 SCK 事务计时。
+ * 显式按高字节、低字节访问 DR，保持与原 HAL 的字节顺序一致。 */
+static AD7682_Status AD7682_SpiExchange(AD7682_Handle *dev, uint16_t wire,
+                                       uint8_t rx[2], uint32_t timeout_ms)
+{
+    SPI_HandleTypeDef *hspi = dev->hspi;
+    SPI_TypeDef *spi = hspi->Instance;
+    uint32_t start = AD7682_TimeUs();
+    uint32_t limit = timeout_ms > 1000U ? 1000000U : timeout_ms * 1000U;
+    uint8_t i;
+    uint8_t tx[2];
+    AD7682_Status result = AD7682_OK;
+    /* 16 clocks need at most 16 us at the supported 1..4 MHz settings.
+     * Bound masked IRQ latency even when SPI malfunctions (UART 115200).
+     * Normal exchanges finish in 8 us at 2 MHz. */
+    if (limit > 50U) { limit = 50U; }
+    if (hspi->State != HAL_SPI_STATE_READY || hspi->Lock == HAL_LOCKED)
+    {
+        return AD7682_ERROR;
+    }
+    hspi->Lock = HAL_LOCKED;
+    hspi->State = HAL_SPI_STATE_BUSY_TX_RX;
+    hspi->ErrorCode = HAL_SPI_ERROR_NONE;
+    __HAL_SPI_ENABLE(hspi);
+    while ((spi->SR & SPI_SR_FRLVL) != 0U)
+    {
+        (void)*(__IO uint8_t *)&spi->DR;
+        if ((uint32_t)(AD7682_TimeUs() - start) >= limit)
+        {
+            result = AD7682_TIMEOUT;
+            goto finish;
+        }
+    }
+    __HAL_SPI_CLEAR_OVRFLAG(hspi);
+    tx[0] = (uint8_t)(wire >> 8);
+    tx[1] = (uint8_t)wire;
+    for (i = 0U; i < 2U; i++)
+    {
+        while ((spi->SR & SPI_SR_TXE) == 0U)
+        {
+            if ((uint32_t)(AD7682_TimeUs() - start) >= limit)
+            {
+                result = AD7682_TIMEOUT;
+                goto finish;
+            }
+        }
+        *(__IO uint8_t *)&spi->DR = tx[i];
+        while ((spi->SR & SPI_SR_RXNE) == 0U)
+        {
+            if ((uint32_t)(AD7682_TimeUs() - start) >= limit)
+            {
+                result = AD7682_TIMEOUT;
+                goto finish;
+            }
+        }
+        rx[i] = *(__IO uint8_t *)&spi->DR;
+    }
+    while ((spi->SR & SPI_SR_BSY) != 0U)
+    {
+        if ((uint32_t)(AD7682_TimeUs() - start) >= limit)
+        {
+            result = AD7682_TIMEOUT;
+            goto finish;
+        }
+    }
+    if ((spi->SR & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_FRE)) != 0U)
+    {
+        result = AD7682_ERROR;
+    }
+finish:
+    if (result != AD7682_OK)
+    {
+        /* 失败后复位 SPI1 并恢复原配置；不用 HAL 内部的滴答等待。 */
+        uint32_t cr1 = spi->CR1 & (uint32_t)~SPI_CR1_SPE;
+        uint32_t cr2 = spi->CR2;
+        __HAL_RCC_SPI1_FORCE_RESET();
+        __HAL_RCC_SPI1_RELEASE_RESET();
+        spi->CR2 = cr2;
+        spi->CR1 = cr1;
+        hspi->ErrorCode = HAL_SPI_ERROR_FLAG;
+    }
+    hspi->State = HAL_SPI_STATE_READY;
+    hspi->Lock = HAL_UNLOCKED;
+    return result;
 }
 
 /* 完成一次“启动转换、发送 CFG、读取数据”的完整 SPI 事务。
@@ -29,19 +134,17 @@ static AD7682_Status AD7682_Transfer(AD7682_Handle *dev, uint16_t cfg,
 {
     /* CFG[13]=0 时保持当前配置；配置更新完成后 DIN 全部保持低电平。 */
     uint16_t wire = update_cfg != 0U ? (uint16_t)(cfg << 2) : 0U;
-    uint8_t tx[2];
     uint8_t rx[2] = {0U};
-    HAL_StatusTypeDef status;
+    AD7682_Status status;
     uint32_t primask;
-    tx[0] = (uint8_t)(wire >> 8);
-    tx[1] = (uint8_t)wire;
     /* 手册建议 CNV 上升沿前保持 SCK/DIN 安静。这里把 SPI 完成后的
      * 安静窗口放在本次事务开头，并与转换窗口一起保护，避免 SysTick、
      * TIM14 或 UART ISR 在 CNV 边沿附近插入数字活动。 */
     primask = __get_PRIMASK();
     __disable_irq();
     AD7682_DelayUs(10U);
-    HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_SET);
+    dev->last_cnv_us = AD7682_TimeUs();
+    dev->cnv_port->BSRR = dev->cnv_pin;
     /* tCONV 最大值为 3.2 us；CNV 保持高电平，留出足够转换余量。 */
     AD7682_DelayUs(10U);
     HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
@@ -50,18 +153,18 @@ static AD7682_Status AD7682_Transfer(AD7682_Handle *dev, uint16_t cfg,
      * SPI 传输前保持 CNV 低电平，满足 tACQ；同时给新选通道及其 RC
      * 输入网络约 500 us 的稳定时间。
      */
-    AD7682_DelayUs(AD7682_ACQUISITION_DELAY_US);
+    AD7682_DelayUs(dev->acquisition_delay_us);
     /* RB=1 时只需要 16 个 SCK：前 16 位为转换结果，之后 SDO 已进入高阻。
      * RB=0 会开启 CFG 回读，需要 30 个 SCK；本驱动不使用该模式。
      * SPI 突发期间不允许中断插入，避免 SCK 被拉长或 UART/TIM 的数字边沿
      * 与 ADC 的最后几位转换数据重叠；500 us 采集等待仍保持可中断。 */
     primask = __get_PRIMASK();
     __disable_irq();
-    status = HAL_SPI_TransmitReceive(dev->hspi, tx, rx, 2U, timeout_ms);
+    status = AD7682_SpiExchange(dev, wire, rx, timeout_ms);
     __set_PRIMASK(primask);
-    if (status != HAL_OK)
+    if (status != AD7682_OK)
     {
-        return status == HAL_TIMEOUT ? AD7682_TIMEOUT : AD7682_ERROR;
+        return status;
     }
     *raw = (uint16_t)(((uint16_t)rx[0] << 8) | rx[1]);
     *readback = 0U;
@@ -76,10 +179,23 @@ AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
     {
         return AD7682_ERROR;
     }
+    if (hspi->Instance != SPI1 || hspi->Init.DataSize != SPI_DATASIZE_8BIT ||
+        hspi->Init.Direction != SPI_DIRECTION_2LINES ||
+        hspi->Init.Mode != SPI_MODE_MASTER)
+    {
+        return AD7682_ERROR;
+    }
+    /* 重试初始化时不重新启动计时器，保持已产生的时间戳连续。 */
+    if ((RCC->APBENR1 & RCC_APBENR1_TIM2EN) == 0U)
+    {
+        AD7682_TimebaseInit();
+    }
     dev->hspi = hspi;
     dev->cnv_port = AD7682_CNV_GPIO_Port;
     dev->cnv_pin = AD7682_CNV_Pin;
     dev->vref_volts = vref_volts;
+    dev->acquisition_delay_us = AD7682_ACQUISITION_DELAY_US;
+    dev->last_cnv_us = 0U;
     HAL_GPIO_WritePin(dev->cnv_port, dev->cnv_pin, GPIO_PIN_RESET);
     HAL_Delay(10U);
     dev->configured_channel = 0U;
@@ -88,8 +204,7 @@ AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
     return AD7682_ReadChannel(dev, 2U, &discarded_code, 100U);
 }
 
-/* AD7682 的配置写入和转换结果存在流水线延迟。通道切换后连续发送两次
- * 新 CFG，并丢弃这两次转换结果；之后的转换才作为该通道的有效结果。 */
+/* 通道切换时第一次发送新 CFG，第二次 DIN=0 保持配置；丢弃两次结果。 */
 static AD7682_Status AD7682_EnsureChannel(AD7682_Handle *dev,
                                           uint8_t channel,
                                           uint32_t timeout_ms)
@@ -151,7 +266,17 @@ AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
                                         uint16_t samples[5],
                                         uint32_t timeout_ms)
 {
+    return AD7682_ReadChannelTimedSamples(dev, channel, samples, NULL, timeout_ms);
+}
+
+AD7682_Status AD7682_ReadChannelTimedSamples(AD7682_Handle *dev,
+                                             uint8_t channel,
+                                             uint16_t samples[5],
+                                             uint32_t timestamps_us[5],
+                                             uint32_t timeout_ms)
+{
     uint16_t values[5];
+    uint32_t times[5];
     uint16_t readback;
     uint16_t cfg;
     uint16_t raw;
@@ -173,8 +298,13 @@ AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
             return status;
         }
         values[i] = raw;
+        times[i] = dev->last_cnv_us;
     }
     for (i = 0U; i < 5U; i++) { samples[i] = values[i]; }
+    if (timestamps_us != NULL)
+    {
+        for (i = 0U; i < 5U; i++) { timestamps_us[i] = times[i]; }
+    }
     return AD7682_OK;
 }
 

@@ -8,8 +8,7 @@
 #define AD7682_CNV_GPIO_Port GPIOA
 #define AD7682_CNV_Pin       GPIO_PIN_5
 
-/* CNV 拉低后的采集保持时间，单位 us。手册规定 tACQ 最小 1.8 us；
- * 当前设置为 500 us，用于验证传感器输出和模拟网络的稳定性。 */
+/* CNV 拉低后的等待时间；用 TIM2 的 1 MHz 自由计数器测量。 */
 #define AD7682_ACQUISITION_DELAY_US 500U
 
 typedef enum
@@ -27,13 +26,26 @@ typedef struct
     float vref_volts;
     uint8_t configured_channel;
     uint8_t configured_channel_valid;
+    uint32_t acquisition_delay_us;
+    uint32_t last_cnv_us;
 } AD7682_Handle;
 
 /* 初始化 SPI、CNV 引脚和参考电压参数。 */
 AD7682_Status AD7682_Init(AD7682_Handle *dev, SPI_HandleTypeDef *hspi,
                           float vref_volts);
+/* TIM2 专用于 ADC 微秒计时：32 位、1 MHz、不产生中断、不占 GPIO。
+ * Init 后可用；约 71.6 分钟回绕，时间差应使用无符号减法。 */
+uint32_t AD7682_TimeUs(void);
+/* 诊断接口：记录每次有效转换 CNV 上升沿附近的硬件时间戳。
+ * 时间戳在写 CNV 前读取，有固定的寄存器访问延迟，分辨率为 1 us。
+ * 不滤波；失败时不修改两个输出数组。 */
+AD7682_Status AD7682_ReadChannelTimedSamples(AD7682_Handle *dev,
+                                             uint8_t channel,
+                                             uint16_t samples[5],
+                                             uint32_t timestamps_us[5],
+                                             uint32_t timeout_ms);
 /* 单次读取一个通道并返回原始码；当前配置关闭 CFG 回读，失败时不修改输出。
- * timeout_ms 是单次 SPI 事务的超时时间。 */
+ * timeout_ms 是单次 SPI 事务超时，上限 1000 ms，不支持无限等待。 */
 AD7682_Status AD7682_ReadChannel(AD7682_Handle *dev, uint8_t channel,
                                  uint16_t *code, uint32_t timeout_ms);
 /* 切换通道后先丢弃两次流水线结果，再连续读取一个通道 5 次；
@@ -42,7 +54,7 @@ AD7682_Status AD7682_ReadChannelSamples(AD7682_Handle *dev, uint8_t channel,
                                         uint16_t samples[5],
                                         uint32_t timeout_ms);
 /* 四通道顺序扫描：每个通道先丢弃两次切换后的结果，再读取 5 个有效样本，
- * 以第 3 个样本的中位数作为该通道结果，抑制单点尖峰。 */
+ * 以排序后第 3 个样本（中位数）作为该通道结果，抑制单点尖峰。 */
 AD7682_Status AD7682_ReadFourChannels(AD7682_Handle *dev, uint16_t codes[4],
                                       uint32_t timeout_ms);
 /* IN0～IN3 每个通道先丢弃两次切换结果，再连续读取 5 个有效样本，

@@ -33,6 +33,15 @@ extern LPS22HH_Device g_lps22hh_u11;
 HAL_StatusTypeDef LPS22HH_Init(SoftI2C_HandleTypeDef *handle, uint32_t timeout);
 HAL_StatusTypeDef LPS22HH_InitDevice(SoftI2C_HandleTypeDef *handle,
                                      LPS22HH_Device *device, uint32_t timeout);
+/* Diagnostic controls: stop ODR conversions while preserving CTRL_REG1 for restore. */
+HAL_StatusTypeDef LPS22HH_SetPowerDown(SoftI2C_HandleTypeDef *handle,
+                                       const LPS22HH_Device *device,
+                                       uint8_t *saved_ctrl_reg1,
+                                       uint32_t timeout);
+HAL_StatusTypeDef LPS22HH_RestoreCtrlReg1(SoftI2C_HandleTypeDef *handle,
+                                          const LPS22HH_Device *device,
+                                          uint8_t ctrl_reg1,
+                                          uint32_t timeout);
 
 /* 读取最新气压（hPa）和温度（°C）。 */
 HAL_StatusTypeDef LPS22HH_Read(SoftI2C_HandleTypeDef *handle,
