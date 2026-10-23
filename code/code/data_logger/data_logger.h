@@ -27,6 +27,8 @@ HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout);
 HAL_StatusTypeDef DataLogger_SetInterval(uint32_t seconds, uint32_t timeout);
 HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
                                                 uint32_t timeout);
+HAL_StatusTypeDef DataLogger_SetRecordingEnabled(uint8_t enabled);
+uint8_t DataLogger_GetRecordingEnabled(void);
 uint32_t DataLogger_Count(void);
 uint32_t DataLogger_LastSequence(void);
 HAL_StatusTypeDef DataLogger_ReadSequence(uint32_t sequence,

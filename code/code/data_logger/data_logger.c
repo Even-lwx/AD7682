@@ -30,6 +30,7 @@ static uint32_t g_logger_sequence;
 static uint32_t g_logger_meta_slot;
 static uint32_t g_logger_interval = LOGGER_DEFAULT_INTERVAL;
 static uint8_t g_logger_dump_newest_first;
+static uint8_t g_logger_recording_enabled = 1U;
 static uint32_t g_logger_config_slot;
 static uint32_t g_logger_config_sequence;
 
@@ -137,6 +138,7 @@ static uint8_t Logger_LoadConfig(void)
 
     g_logger_interval = LOGGER_DEFAULT_INTERVAL;
     g_logger_dump_newest_first = 0U;
+    g_logger_recording_enabled = 1U;
     g_logger_config_slot = 0U;
     g_logger_config_sequence = 0U;
     for (slot = 0U; slot < LOGGER_CONFIG_SLOTS; slot++)
@@ -155,6 +157,8 @@ static uint8_t Logger_LoadConfig(void)
             {
                 g_logger_dump_newest_first = config[12];
             }
+            /* Reserved byte in v1: legacy 0xFF keeps automatic logging on. */
+            g_logger_recording_enabled = config[13] <= 1U ? config[13] : 1U;
             latest_slot = slot;
             found = 1U;
         }
@@ -213,6 +217,7 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
     Logger_Put32(&config[4], g_logger_config_sequence);
     Logger_Put32(&config[8], g_logger_interval);
     config[12] = g_logger_dump_newest_first;
+    config[13] = g_logger_recording_enabled;
     Logger_Put16(&config[30], Logger_Crc16(config, 30U));
     address = LOGGER_CONFIG_ADDRESS + g_logger_config_slot * LOGGER_CONFIG_SIZE;
 
@@ -446,7 +451,7 @@ HAL_StatusTypeDef DataLogger_Append(const DataLogger_Sample *sample,
     uint8_t record[LOGGER_RECORD_SIZE];
     uint32_t address;
 
-    if (g_logger_spi == NULL || sample == NULL)
+    if (g_logger_spi == NULL || sample == NULL || g_logger_recording_enabled == 0U)
     {
         return HAL_ERROR;
     }
@@ -552,6 +557,23 @@ HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
 uint32_t DataLogger_Count(void)
 {
     return g_logger_count;
+}
+
+HAL_StatusTypeDef DataLogger_SetRecordingEnabled(uint8_t enabled)
+{
+    uint8_t previous = g_logger_recording_enabled;
+    HAL_StatusTypeDef status;
+    enabled = enabled != 0U ? 1U : 0U;
+    if (enabled == previous) { return HAL_OK; }
+    g_logger_recording_enabled = enabled;
+    status = Logger_SaveConfig();
+    if (status != HAL_OK) { g_logger_recording_enabled = previous; }
+    return status;
+}
+
+uint8_t DataLogger_GetRecordingEnabled(void)
+{
+    return g_logger_recording_enabled;
 }
 
 uint32_t DataLogger_LastSequence(void)

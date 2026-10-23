@@ -40,6 +40,7 @@
 #define SENSOR_INVALID_FLOAT (-9999.0f)
 #define SENSOR_INVALID_ADC   0xFFFFU
 #define PRESSURE_AVG_WINDOW  50U
+#define SHT_AVG_WINDOW       50U
 #define ADC_DIAG_ROWS        96U
 #define ADC_DIAG_FIRST_PHASE 29U
 #define ADC_DIAG_PHASES      40U /* Exclusive end; this run uses phases 29..39. */
@@ -111,6 +112,7 @@ volatile float g_adc_filtered_codes[4];
 volatile uint16_t g_adc_raw_codes[4];
 volatile AD7682_Status g_adc_normal_status;
 static uint32_t g_record_last_second;
+static volatile uint8_t g_recording_enabled;
 static uint32_t g_dump_remaining;
 static uint32_t g_dump_sequence;
 static uint8_t g_dump_newest_first;
@@ -250,6 +252,7 @@ int main(void)
   memset((void *)g_adc_filtered_codes, 0, sizeof(g_adc_filtered_codes));
   memset((void *)g_adc_raw_codes, 0, sizeof(g_adc_raw_codes));
   g_record_due = 0U;
+  g_recording_enabled = DataLogger_GetRecordingEnabled();
   g_sensor_sample_elapsed_ms = 0U;
   g_sensor_sample_request = 0U;
   g_record_last_second = g_record_timer_seconds;
@@ -1134,7 +1137,7 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
 }
 
 /* setting 模式下只处理配置和日志命令；实时采样不会被暂停。 */
-static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
+static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog start\r\nlog stop\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
@@ -1192,7 +1195,25 @@ static void Serial_ProcessCommand(void)
   if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
   {
-    if(Serial_Equals(trimmed,"log dump"))
+    if(Serial_Equals(trimmed,"log start") || Serial_Equals(trimmed,"log stop"))
+    {
+      uint8_t enabled = Serial_Equals(trimmed,"log start") ? 1U : 0U;
+      if(DataLogger_SetRecordingEnabled(enabled)==HAL_OK)
+      {
+        uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+        if(g_recording_enabled != enabled)
+        {
+          g_recording_enabled = enabled;
+          g_record_due = 0U;
+          g_record_last_second = g_record_timer_seconds;
+        }
+        __set_PRIMASK(primask);
+        Serial_Write(enabled ? "LOG RECORDING ON\r\n" : "LOG RECORDING OFF\r\n");
+      }
+      else { Serial_Write("LOG RECORDING CONFIG ERROR\r\n"); }
+    }
+    else if(Serial_Equals(trimmed,"log dump"))
     {
       g_dump_remaining = DataLogger_Count();
       g_dump_newest_first = DataLogger_GetDumpNewestFirst();
@@ -1202,11 +1223,12 @@ static void Serial_ProcessCommand(void)
     else if(Serial_Equals(trimmed,"log info"))
     {
       char line[128];
-      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu interval=%lus order=%s\r\n",
+      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu interval=%lus order=%s recording=%s\r\n",
                      (unsigned long)DataLogger_Count(),
                      (unsigned long)DataLogger_Capacity(),
                      (unsigned long)DataLogger_GetInterval(),
-                     DataLogger_GetDumpNewestFirst() ? "newest-first" : "oldest-first");
+                     DataLogger_GetDumpNewestFirst() ? "newest-first" : "oldest-first",
+                     g_recording_enabled ? "on" : "off");
       Serial_Write(line);
     }
     else if(strncmp(trimmed,"log interval ",13U)==0)
@@ -1294,19 +1316,33 @@ static float Median3(float a, float b, float c)
   return b;
 }
 
-/* 只接受成功且范围有效的测量；失败不把人为补零放进窗口。
- * 初次成功填满窗口，后续三点中值去除孤立尖峰，不禁止真实零值。
- * 串口允许短期保持上次结果，但超过 5 秒未成功更新不写入历史。 */
+/* 三点中值后接50点滑动平均，温湿度独立运算并保留小数。
+ * 只接受成功且范围有效的测量；断连超过5秒后重新建立窗口。
+ * 串口和Flash使用同一结果；超过5秒未更新时均使用无效标记。 */
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity)
 {
   static float temperatures[3];
   static float humidities[3];
   static uint8_t index;
+  static float mean_temperatures[SHT_AVG_WINDOW];
+  static float mean_humidities[SHT_AVG_WINDOW];
+  static float temperature_sum;
+  static float humidity_sum;
+  static uint8_t mean_count;
+  static uint8_t mean_index;
+  float median_temperature;
+  float median_humidity;
+  uint32_t now = HAL_GetTick();
   uint8_t i;
   if (status != HAL_OK || !(temperature >= -40.0f && temperature <= 125.0f) ||
       !(humidity >= 0.0f && humidity <= 100.0f)) { return; }
-  if (!g_sht_filter_valid)
+  if (!g_sht_filter_valid || (now - g_sht_last_valid_tick) > 5000U)
   {
+    index = 0U;
+    mean_count = 0U;
+    mean_index = 0U;
+    temperature_sum = 0.0f;
+    humidity_sum = 0.0f;
     for (i = 0U; i < 3U; i++)
     {
       temperatures[i] = temperature;
@@ -1317,9 +1353,22 @@ static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float 
   temperatures[index] = temperature;
   humidities[index] = humidity;
   index = (uint8_t)((index + 1U) % 3U);
-  g_sht_filtered_temperature = Median3(temperatures[0], temperatures[1], temperatures[2]);
-  g_sht_filtered_humidity = Median3(humidities[0], humidities[1], humidities[2]);
-  g_sht_last_valid_tick = HAL_GetTick();
+  median_temperature = Median3(temperatures[0], temperatures[1], temperatures[2]);
+  median_humidity = Median3(humidities[0], humidities[1], humidities[2]);
+  if (mean_count == SHT_AVG_WINDOW)
+  {
+    temperature_sum -= mean_temperatures[mean_index];
+    humidity_sum -= mean_humidities[mean_index];
+  }
+  else { mean_count++; }
+  mean_temperatures[mean_index] = median_temperature;
+  mean_humidities[mean_index] = median_humidity;
+  temperature_sum += median_temperature;
+  humidity_sum += median_humidity;
+  mean_index = (uint8_t)((mean_index + 1U) % SHT_AVG_WINDOW);
+  g_sht_filtered_temperature = temperature_sum / (float)mean_count;
+  g_sht_filtered_humidity = humidity_sum / (float)mean_count;
+  g_sht_last_valid_tick = now;
 }
 
 /* LPS22HH 的有效气压范围约为 260~1260 hPa；这里放宽到 0~2000 hPa，
@@ -1393,7 +1442,8 @@ static void RecordCaptureDue(void)
   uint32_t elapsed;
   uint8_t channel;
   uint32_t primask;
-  if (interval == 0U || (now - g_record_last_second) < interval) { return; }
+  if (g_recording_enabled == 0U || interval == 0U ||
+      (now - g_record_last_second) < interval) { return; }
   /* Never create initial records from zero-initialized buffers. After the
    * first real window, SPI failures retain the last measured filtered code. */
   for (channel = 0U; channel < 4U; channel++)
@@ -1419,6 +1469,8 @@ static void RecordWritePending(void)
 {
   DataLogger_Sample sample;
   uint32_t primask;
+  uint8_t sht_fresh;
+  if (g_recording_enabled == 0U) { g_record_due = 0U; return; }
   if (g_record_due == 0U || g_adc_diag_active != 0U) { return; }
   primask = __get_PRIMASK();
   __disable_irq();
@@ -1434,9 +1486,11 @@ static void RecordWritePending(void)
   {
     memset(&sample.datetime, 0, sizeof(sample.datetime));
   }
-  sample.temperature_c = g_sht_filter_valid ? g_sht_filtered_temperature :
+  sht_fresh = (uint8_t)(g_sht_filter_valid &&
+                       (HAL_GetTick() - g_sht_last_valid_tick) <= 5000U);
+  sample.temperature_c = sht_fresh ? g_sht_filtered_temperature :
                          SENSOR_INVALID_FLOAT;
-  sample.humidity_rh = g_sht_filter_valid ? g_sht_filtered_humidity :
+  sample.humidity_rh = sht_fresh ? g_sht_filtered_humidity :
                        SENSOR_INVALID_FLOAT;
   sample.pressure_u7_hpa = g_u7_pressure_average.count != 0U ?
       g_u7_pressure_average.sum / (float)g_u7_pressure_average.count : SENSOR_INVALID_FLOAT;
