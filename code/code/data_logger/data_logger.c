@@ -169,7 +169,7 @@ static uint8_t Logger_LoadConfig(void)
                 Logger_Get32(&config[20]) <= 86400000UL &&
                 Logger_Get32(&config[20]) % 500UL == 0U)
             { g_logger_interval = Logger_Get32(&config[20]); }
-            /* v1 配置中的保留字节：旧的擦除值表示使用默认值。 */
+            /* v1 配置中的保留字节：旧的擦除值表示使用单位增益 1。 */
             g_battery_gain_ppm = Logger_Get32(&config[16]);
             if (g_battery_gain_ppm < 500000UL || g_battery_gain_ppm > 1500000UL)
             { g_battery_gain_ppm = 1000000UL; }

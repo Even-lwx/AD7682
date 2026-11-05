@@ -49,7 +49,7 @@ static AD7682_Status AD7682_SpiExchange(AD7682_Handle *dev, uint16_t wire,
     uint8_t tx[2];
     AD7682_Status result = AD7682_OK;
     /* 在支持的 1～4 MHz 设置下，16 个时钟最多需要 16 us。
-     * Bound masked IRQ latency even when SPI malfunctions (UART 115200).
+     * 即使 SPI 故障，也限制中断被屏蔽的时长（串口 115200）。
      * 在 2 MHz 下，正常事务耗时 8 us。 */
     if (limit > 50U) { limit = 50U; }
     if (hspi->State != HAL_SPI_STATE_READY || hspi->Lock == HAL_LOCKED)
