@@ -34,8 +34,10 @@ code/MDK-ARM/*.uvoptx
 # Altium generated history, previews, logs and output folders
 **/History/
 **/__Previews/
-**/Project Logs/
-**/Project Outputs/
+**/Project Logs*/
+**/Project Outputs*/
+.codex-build/
+.codex-finalizer/
 
 # Temporary analysis/export artifacts
 tmp_*.pdf
