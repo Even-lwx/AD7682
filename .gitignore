@@ -55,6 +55,7 @@ assets/
 *.zip
 analysis_output*/
 **/log/
+.venv-host/
 
 # 本地测量工作簿
 LP5907_3-2V电压变化.xlsx

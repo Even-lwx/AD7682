@@ -8,6 +8,7 @@ STM32G031C8 固件负责四路 AD7682、温湿度、双气压计、电池、RTC�
 - 应用入口与调度：`code/Core/Src/main.c`；中断入口：`code/Core/Src/stm32g0xx_it.c`。
 - 自有驱动：`code/code/`；模块用途见[源码索引](code/docs/SOURCE_GUIDE.md)。
 - 上位机操作、协议、CSV 列定义和验证命令：[上位机说明](code/host/README.md)。
+- 上位机开发环境、依赖安装、测试和打包：[上位机开发文档](code/host/DEVELOPMENT.md)。
 - ADC 当前滤波：[滤波说明](code/code/ad7682/FILTER_CURRENT.md)。
 - 电池换算：[电池说明](code/code/battery/CALIBRATION.md)。
 - 旧 ADC 实验：[历史目录](code/docs/archive/README.md)，仅用于回溯实验。

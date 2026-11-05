@@ -1,5 +1,7 @@
 # AD7682 上位机 v1.4（流式 CRC32 整批导出）
 
+开发环境、虚拟环境安装、测试和 EXE 打包流程见 [上位机开发文档](DEVELOPMENT.md)。
+
 支持 Windows 串口实时接收、CRC-16/MODBUS 校验、单次自动重发、Flash 按时间段导出及 VOFA 格式 CSV。安装包里的 EXE 可直接运行，无需安装 Python。
 
 ## 开始使用
