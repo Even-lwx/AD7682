@@ -85,8 +85,8 @@ static void Link_Fail(void)
 
 static void Link_Transmit(void)
 {
-    /* HAL_OK confirms only local completion. Await a CRC-protected peer ACK.
-     * Leading CRLF re-synchronizes a receiver after a partial first send. */
+    /* HAL_OK 只表示本地发送完成，仍需等待带 CRC 保护的对端确认。
+     * 首次发送不完整时，前导 CRLF 用于让接收端重新同步。 */
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)g_frame, g_frame_length, 100U);
     g_sent_tick = HAL_GetTick();
 }
@@ -131,7 +131,7 @@ void UartCrc_Process(void)
 uint8_t UartCrc_HandleControl(const char *line)
 {
     uint32_t session, sequence, crc;
-    /* @A,session8,sequence8*crc4 (CRC covers A through the last seq digit). */
+    /* 确认帧格式为 @A,session8,sequence8*crc4，CRC 覆盖 A 到序号最后一位。 */
     if (line[0] != '@') { return 0U; }
     if (!g_enabled || !g_pending || strlen(line) != 25U ||
         (line[1] != 'A' && line[1] != 'N') || line[2] != ',' ||
@@ -141,9 +141,10 @@ uint8_t UartCrc_HandleControl(const char *line)
         !Link_ParseHex(line + 21U, 4U, &crc) ||
         crc != Link_Crc16(line + 1U, 19U) || session != g_session || sequence != g_sequence)
     {
-        return 1U; /* A damaged/stale ACK must not release the cached frame. */
+        return 1U; /* 损坏或过期的确认帧不能释放缓存帧。 */
     }
     if (line[1] == 'A') { g_pending = 0U; g_sequence++; }
     else { Link_Retry(); }
     return 1U;
 }
+

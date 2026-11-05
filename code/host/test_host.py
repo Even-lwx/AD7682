@@ -97,7 +97,7 @@ class CsvTests(unittest.TestCase):
             self.assertFalse(path.exists())
 
     def test_real_vofa_sample_compatibility(self):
-        # Exported sample comes from the user's preexisting VOFA file.
+        # 导出样本来自用户已有的 VOFA 文件。
         sample = Path(__file__).parents[1] / "log" / "1030-1102-1号板.csv"
         if not sample.exists():
             self.skipTest("Original measurement CSV not present")
@@ -105,7 +105,7 @@ class CsvTests(unittest.TestCase):
             reader = csv.reader(stream)
             self.assertEqual(next(reader), [f"I{i}" for i in range(15)])
             row = next(reader)
-        # Firmware transmits first six as integers and other values to 2 decimals.
+        # 固件将前六项按整数发送，其他数值保留两位小数。
         payload = "samples: " + ",".join(str(int(float(v))) if i < 6 else f"{float(v):.2f}" for i, v in enumerate(row))
         self.assertEqual(sample_values(payload, True), row)
 
@@ -218,7 +218,7 @@ class IntegrationTests(unittest.TestCase):
                 device.command("info")
                 time.sleep(0.2)
                 self.assertEqual(device.phase, "")
-                # A second export must use a separate 15-column file.
+                # 第二次导出必须使用独立的 15 列文件。
                 target2 = Path(folder)/"test-hpa.csv"
                 device.command("dump", (str(target2), "hpa", "new", ""))
                 self.assertTrue(self.wait_event(events, "done")[0])
@@ -245,7 +245,7 @@ class IntegrationTests(unittest.TestCase):
                     device.command("configure", (kind, value))
                     success, message, info = self.wait_event(events, "config_result")
                     self.assertTrue(success, message)
-                    self.assertFalse(device.serial.setting)  # Live mode is restored.
+                    self.assertFalse(device.serial.setting)  # 恢复实时模式。
                     if kind == "interval":
                         self.assertEqual(info["interval"], "2.5")
                     if kind == "order":
@@ -264,7 +264,7 @@ class IntegrationTests(unittest.TestCase):
                 original = target.read_bytes()
                 device.command("configure", ("interval", "5"))
                 self.assertTrue(self.wait_event(events, "config_result")[0])
-                self.assertFalse(device.serial.setting)  # Dump completion restores live mode.
+                self.assertFalse(device.serial.setting)  # 导出完成后恢复实时模式。
                 self.assertEqual(target.read_bytes(), original)
             finally:
                 device.command("disconnect")
@@ -292,7 +292,7 @@ class IntegrationTests(unittest.TestCase):
                 while "log clear" not in device.serial.commands and time.monotonic()<until:
                     time.sleep(0.01)
                 self.assertIn("log clear", device.serial.commands)
-                device.deadline = 0  # Advance the configured timeout without a ten-second sleep.
+                device.deadline = 0  # 推进配置的超时时间，无需实际等待十秒。
                 error = None
                 until = time.monotonic()+3
                 while time.monotonic()<until:

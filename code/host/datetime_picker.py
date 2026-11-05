@@ -53,7 +53,7 @@ class DateTimePicker(ttk.Frame):
             if 0 <= number < (24, 60, 60)[index]:
                 self.parts[index].set(f"{number:02d}")
         except ValueError:
-            pass  # Keep invalid input visible; export validation explains it.
+            pass  # 保留无效输入供用户查看，由导出校验给出原因。
 
     def open_calendar(self):
         if self.popup and self.popup.winfo_exists():

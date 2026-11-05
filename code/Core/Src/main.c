@@ -48,11 +48,11 @@
 #define BATTERY_AVG_WINDOW   50U
 #define ADC_DIAG_ROWS        96U
 #define ADC_DIAG_FIRST_PHASE 29U
-#define ADC_DIAG_PHASES      40U /* Exclusive end; this run uses phases 29..39. */
+#define ADC_DIAG_PHASES      40U /* 结束值不包含在范围内；本轮使用阶段 29～39。 */
 #define ADC_DIAG_BLOCKS      3U
 #define ADC_DIAG_PERIOD_US   20000U
 #define ADC_FILTER_WINDOW    100U
-/* 100 Hz: alpha = 1-exp(-0.01/0.2), precomputed to avoid exp() in ISR. */
+/* 100 Hz 时 alpha = 1-exp(-0.01/0.2)，预先计算以避免在中断中调用 exp()。 */
 #define ADC_LOWPASS_ALPHA    0.0487705755f
 #define ADC_PROBE_POINTS     288U
 #define ADC_PROBE_PHASES     6U
@@ -157,8 +157,8 @@ static AD7682_Status g_adc_status = AD7682_ERROR;
 static uint8_t g_w25q_ready;
 static PressureAverage g_u7_pressure_average;
 static PressureAverage g_u11_pressure_average;
-/* Diagnostic capture and normal filtering never run simultaneously. Reuse
- * their RAM so four 100-point filters fit in the STM32G031's 8 KiB SRAM. */
+/* 诊断采集和正常滤波不会同时运行；复用
+ * 二者的内存，使四路 100 点滤波器能装入 STM32G031 的 8 KiB SRAM。 */
 static union
 {
   AdcDiagRow diagnostic[ADC_DIAG_ROWS];
@@ -285,8 +285,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Devices_Initialize();
   (void)DataLogger_Init(&hspi2, BOOT_INIT_TIMEOUT);
-  /* OLED shares SPI2 with Flash; both chip selects were made inactive by GPIO init.
-   * No display acknowledgement exists on this write-only SPI interface. */
+  /* OLED 与 Flash 共用 SPI2；GPIO 初始化已将两路片选置为无效。
+   * 这个只写 SPI 接口没有显示屏应答信号。 */
   {
     HAL_StatusTypeDef oled_status;
     uint8_t attempt;
@@ -297,8 +297,8 @@ int main(void)
     }
     if (oled_status == HAL_OK)
     {
-      /* Prove the display path before starting ADC interrupts or waiting for
-       * filters. SPI is write-only: TX OK is not an OLED acknowledgement. */
+      /* 启动 ADC 中断或等待滤波器之前，先检查
+       * 显示通路；SPI 为只写接口，发送成功不代表 OLED 已应答。 */
       (void)SSD1306_BeginFrame(HAL_GetTick());
       SSD1306_SetLine(0U, "SSD1306 READY");
       SSD1306_SetLine(2U, "WAITING FOR SENSORS");
@@ -361,8 +361,8 @@ int main(void)
     UartCrc_Process();
     if (UartCrc_IsFailed()) { g_dump_remaining = 0U; g_dump_report_pending = 0U; }
     if (g_adc_diag_active == 0U) { Ui_Process(); }
-    /* Drain a page before blocking sensor reads as well as after them, so
-     * continuous 20 ms sensor requests do not stretch a frame to eight loops. */
+    /* 在阻塞式传感器读取前后各发送一个页面，防止
+     * 连续的 20 ms 传感器请求使一帧绘制延长到八次循环。 */
     if (g_adc_diag_active == 0U && g_record_due == 0U && g_dump_remaining == 0U)
     {
       SSD1306_Process(HAL_GetTick());
@@ -374,7 +374,7 @@ int main(void)
     }
     RecordWritePending();
     if (g_adc_diag_active == 0U) { Serial_DumpLogs(); }
-    /* Logs and commands have priority. Diagnostic captures must stay quiet. */
+    /* 日志和命令优先，诊断采集期间必须保持安静。 */
     if (g_adc_diag_active == 0U && g_record_due == 0U &&
         g_dump_remaining == 0U)
     {
@@ -472,7 +472,7 @@ static void RecordTimer_Init(void)
   HAL_NVIC_SetPriority(TIM3_IRQn, 2U, 0U);
   HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
   HAL_NVIC_EnableIRQ(TIM3_IRQn);
-  /* Start only after diagnostics, so its IRQ does not contaminate tests. */
+  /* 诊断结束后才启动，避免其中断干扰测试。 */
 
   __HAL_RCC_TIM14_CLK_ENABLE();
   TIM14->CR1 = 0U;
@@ -492,8 +492,8 @@ static void RecordTimer_Init(void)
   HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
   HAL_NVIC_EnableIRQ(TIM14_IRQn);
   TIM14->CR1 = TIM_CR1_CEN;
-  /* SysTick must be able to preempt the ~1.7 ms ADC scan; otherwise multiple
-   * 1 ms ticks merge, slowing HAL timeouts and SHT41 conversion waits. */
+  /* SysTick 必须能抢占约 1.7 ms 的 ADC 扫描，否则多个
+   * 1 ms 滴答会合并，使 HAL 超时和 SHT41 转换等待变慢。 */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0U, 0U);
 }
 
@@ -512,12 +512,12 @@ static uint8_t SensorSample_ConsumeRequest(void)
   return request;
 }
 
-/* Only used between diagnostic captures, with TIM3 stopped.
- * Modes: 0=PLL 64 MHz, 1=PLL/AHB2 32 MHz, 2=HSI 16 MHz + PLL on,
- * 3=HSI 16 MHz + PLL off. HSI itself must remain on in every mode.
- * HAL recalibrates SysTick; explicitly recalibrate the three hardware timers
- * and UART. TIM2 resets only at phase boundaries, before any timestamps exist.
- * Status bits: RCC=1, UART init=2, RX arm=4, SPI2 init=8, PLL=16. */
+/* 仅在两次诊断采集之间、TIM3 停止时使用。
+ * 模式：0=PLL 64 MHz，1=PLL/AHB2 32 MHz，2=HSI 16 MHz 且 PLL 开启，
+ * 3=HSI 16 MHz 且 PLL 关闭；所有模式下 HSI 自身都必须保持开启。
+ * HAL 会重新校准 SysTick，还需显式重新校准三个硬件定时器
+ * 和串口。TIM2 仅在阶段边界、产生任何时间戳之前复位。
+ * 状态位：RCC=1、串口初始化=2、接收启动=4、SPI2 初始化=8、PLL=16。 */
 static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
 {
   RCC_ClkInitTypeDef clocks = {0};
@@ -540,10 +540,10 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
   TIM14->CR1 &= (uint32_t)~TIM_CR1_CEN;
   TIM2->CR1 = 0U;
   __set_PRIMASK(primask);
-  /* Oscillator readiness waits must run with SysTick IRQ enabled, so HAL
-   * timeouts remain bounded even if a clock does not become ready. PLL OFF
-   * clears its source selection in this HAL: explicitly restore all boot
-   * PLL parameters instead of reading the cleared configuration back. */
+  /* 等待振荡器就绪时必须开启 SysTick 中断，确保即使时钟未就绪，HAL
+   * 仍能有限超时。此 HAL 中关闭 PLL
+   * 会清除源选择，因此必须显式恢复所有启动时的
+   * PLL 参数，不能读回已清除的配置。 */
   osc.PLL.PLLState = RCC_PLL_ON;
   osc.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   osc.PLL.PLLM = RCC_PLLM_DIV1;
@@ -559,12 +559,12 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
   clocks.SYSCLKSource = mode >= 2U ? RCC_SYSCLKSOURCE_HSI : RCC_SYSCLKSOURCE_PLLCLK;
   clocks.AHBCLKDivider = mode == 1U ? RCC_SYSCLK_DIV2 : RCC_SYSCLK_DIV1;
   clocks.APB1CLKDivider = RCC_HCLK_DIV1;
-  /* Keep two Flash wait states at all speeds. */
+  /* 所有频率下都保持两个 Flash 等待周期。 */
   if (HAL_RCC_ClockConfig(&clocks, FLASH_LATENCY_2) != HAL_OK) { status |= 1U; }
   if (HAL_RCC_GetHCLKFreq() != target) { status |= 1U; }
   if (mode == 3U)
   {
-    /* Never stop PLL until HSI is confirmed as the CPU clock source. */
+    /* 确认 HSI 已成为 CPU 时钟源之前，不得停止 PLL。 */
     if (__HAL_RCC_GET_SYSCLK_SOURCE() == RCC_SYSCLKSOURCE_STATUS_HSI)
     {
       osc.PLL.PLLState = RCC_PLL_OFF;
@@ -594,8 +594,8 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
   TIM14->CR1 |= timer_enabled;
   __set_PRIMASK(primask);
 
-  /* USART1 is clocked by PCLK1. Recompute BRR before sending metadata;
-   * never transmit using the previous clock's baud divisor. */
+  /* USART1 使用 PCLK1 时钟，发送元数据之前重新计算 BRR；
+   * 不能使用切换时钟前的波特率分频值发送。 */
   if (HAL_UART_Init(&huart1) != HAL_OK) { status |= 2U; }
   __HAL_UART_CLEAR_FLAG(&huart1, UART_CLEAR_OREF | UART_CLEAR_NEF |
                                   UART_CLEAR_PEF | UART_CLEAR_FEF);
@@ -612,11 +612,11 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
   return status;
 }
 
-/* LPS22HH datasheet Rev 2 p43: CTRL_REG1(10h) ODR[6:4]=000 stops
- * autonomous conversions, preserving other control bits and I2C access.
- * Save each original register once per diagnostic run, and verify every
- * write. Bit0/1 of the result identify U7/U11 setup or readback failure.
- * Always call on 64 MHz, since software I2C delays use CPU cycles. */
+/* 依据 LPS22HH 数据手册第 2 版第 43 页，CTRL_REG1(10h) 的 ODR[6:4]=000 会停止
+ * 自主转换，同时保留其他控制位和 I2C 访问能力。
+ * 每轮诊断保存一次各寄存器原值，并校验每次
+ * 写入；结果的 bit0/1 分别表示 U7/U11 设置或读回失败。
+ * 由于软件 I2C 延时依赖 CPU 周期，必须在 64 MHz 下调用。 */
 static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask)
 {
   const LPS22HH_Device *devices[2] = { &g_lps22hh_u7, &g_lps22hh_u11 };
@@ -646,10 +646,10 @@ static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask)
   return result;
 }
 
-/* Only change OSPEEDR fields for PA1=SCK, PA7=DIN and PA5=CNV.
- * Never reinitialize GPIO mode/AF or touch PA6 (ADC drives SDO/MISO).
- * STM32G0 HAL LOW=00, HIGH=10. No output level or clock rate changes here.
- * high_mask: bit0=SCK, bit1=DIN, bit2=CNV. Called outside capture only. */
+/* 只修改 PA1=SCK、PA7=DIN、PA5=CNV 的 OSPEEDR 字段。
+ * 不要重新初始化 GPIO 模式或复用功能，也不要修改由 ADC 驱动 SDO/MISO 的 PA6。
+ * STM32G0 HAL 中 LOW=00、HIGH=10；这里不改变输出电平或时钟频率。
+ * high_mask 中 bit0=SCK、bit1=DIN、bit2=CNV；仅在采集之外调用。 */
 static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask)
 {
   const uint32_t mask = (3UL << 2U) | (3UL << 14U) | (3UL << 10U);
@@ -721,8 +721,8 @@ static void AdcDiag_StartPhase(void)
                       g_adc_diag_phase == 38U ? 7U : 0U;
   HAL_StatusTypeDef spi_status;
 
-  /* Apply sensor controls before slowing the CPU. All bus transactions occur
-   * outside capture, and a settling delay excludes the switching transient. */
+  /* 降低 CPU 频率之前先应用传感器控制，所有总线事务都在
+   * 采集之外执行，并通过稳定延时排除切换瞬态。 */
   g_adc_diag_lps_status = (g_adc_diag_phase >= 18U && g_adc_diag_phase < 29U) ?
                          AdcDiag_SetLpsMode(lps_mask) : 0U;
   g_adc_diag_clock_status = AdcDiag_SetCoreClock(clock_mode);
@@ -741,8 +741,8 @@ static void AdcDiag_StartPhase(void)
     spi_hz = 4000000U;
   }
   spi_status = HAL_SPI_Init(&hspi1);
-  /* Apply after SPI init, so even an MSP reinitialization cannot overwrite
-   * the requested edge setting. Warm-up/config and capture use this setting. */
+  /* 在 SPI 初始化后应用，确保即使 MSP 重新初始化也不会覆盖
+   * 所需的边沿设置；预热、配置和采集均使用该设置。 */
   g_adc_diag_edge_status = AdcDiag_SetEdgeSpeed(edge_mask);
   g_ad7682.acquisition_delay_us = AD7682_ACQUISITION_DELAY_US;
   if (g_adc_diag_phase == 6U) { g_ad7682.acquisition_delay_us = 100U; }
@@ -863,8 +863,8 @@ static void AdcDiag_StopPhase(void)
                    (unsigned long)HAL_RCC_GetHCLKFreq());
     Serial_Write(line);
   }
-  /* Restore before buffered output, and before the next phase/normal mode.
-   * All capture timestamps have already been saved in the row buffer. */
+  /* 在输出缓冲数据以及进入下一阶段或正常模式之前恢复。
+   * 所有采集时间戳均已保存在行缓冲区中。 */
   {
     uint8_t restore_status = 0U;
     uint8_t lps_restore = 0U;
@@ -906,9 +906,9 @@ static void AdcDiag_StopPhase(void)
   }
 }
 
-/* Application-only probe: reuse the existing raw single-channel driver and
- * workspace. No reference, GPIO speed, SPI clock or conversion timing changes.
- * Capture has no UART TX, I2C or flash access. SysTick/TIM14/RX remain enabled. */
+/* 仅应用层探测：复用现有单通道原始采集驱动和
+ * 工作区，不改变参考源、GPIO 速度、SPI 时钟或转换时序。
+ * 采集时不进行串口发送、I2C 或 Flash 访问，SysTick、TIM14 和接收保持开启。 */
 static uint32_t AdcProbe_NextPeriod(void)
 {
   if (g_adc_diag_phase == 1U)
@@ -927,8 +927,8 @@ static uint32_t AdcProbe_NextPeriod(void)
 
 static void AdcProbe_Finish(void)
 {
-  /* The raw capture occupied the filter RAM. Clear it before restarting IRQs;
-   * normal output/records wait for fresh 100-point windows, as at power-up. */
+  /* 原始采集占用了滤波器内存，重新开启中断前先清空；
+   * 正常输出和记录与上电时一样，等待新的 100 点窗口建立。 */
   memset(&g_adc_workspace, 0, sizeof(g_adc_workspace));
   memset((void *)g_adc_filtered_codes, 0, sizeof(g_adc_filtered_codes));
   memset((void *)g_adc_raw_codes, 0, sizeof(g_adc_raw_codes));
@@ -962,7 +962,7 @@ static void AdcProbe_ProcessRequest(void)
   if (g_adc_diag_phase_ready == 0U)
   {
     g_ad7682.acquisition_delay_us = 100U;
-    /* Establish the selected channel before the timed capture. */
+    /* 定时采集前先建立所选通道。 */
     g_ad7682.configured_channel_valid = 0U;
     status = AD7682_ReadChannel(&g_ad7682, g_adc_diag_channel, &raw, 10U);
     (void)snprintf(line, sizeof(line),
@@ -974,7 +974,7 @@ static void AdcProbe_ProcessRequest(void)
       (unsigned long)(HAL_RCC_GetPCLK1Freq() /
                      (2UL << ((SPI1->CR1 & SPI_CR1_BR) >> 3U))));
     Serial_Write(line);
-    /* TX is complete before this quiet guard. Peripheral power stays unchanged. */
+    /* 进入安静保护时间之前发送已完成，外设供电保持不变。 */
     HAL_Delay(250U);
     g_adc_diag_count = 0U;
     g_adc_diag_phase_start_us = AD7682_TimeUs();
@@ -1001,8 +1001,8 @@ static void AdcProbe_ProcessRequest(void)
   }
   if (g_adc_diag_count < ADC_PROBE_POINTS) { return; }
 
-  /* Dump only after the whole contiguous block is captured; each block has
-   * its own time origin. Never infer time across the UART dump/quiet gap. */
+  /* 整块连续数据采集完成后才导出；每个数据块都有
+   * 独立时间起点，不得跨串口导出或安静间隔推算时间。 */
   for (i = 0U; i < ADC_PROBE_POINTS; i++)
   {
     point = &g_adc_workspace.probe[i];
@@ -1037,9 +1037,9 @@ static void AdcDiag_ProcessRequest(void)
   now = AD7682_TimeUs();
   if ((int32_t)(now - g_adc_diag_next_us) < 0)
   {
-    /* Only alter inter-group activity, never the ADC transfer itself.
-     * WFI wakes at least every 1 ms; final 2 ms use polling for an accurate
-     * trigger deadline. The active workload is short and similarly bounded. */
+    /* 仅改变组间活动，不改变 ADC 传输本身。
+     * WFI 至少每 1 ms 唤醒一次，最后 2 ms 使用轮询以精确
+     * 控制触发时刻；主动运行的工作量也保持短小且有界。 */
     if ((uint32_t)(g_adc_diag_next_us - now) > 2000U)
     {
       if (g_adc_diag_phase == 11U) { __DSB(); __WFI(); }
@@ -1092,9 +1092,9 @@ static void AdcDiag_ProcessRequest(void)
     AdcDiag_DumpPhase(g_adc_diag_phase);
     g_adc_diag_count = 0U;
     g_adc_diag_block++;
-    /* Each block is an independent capture with its own timestamp origin.
-     * Dump while sampling is stopped; do not let UART activity contaminate
-     * the next block. The 995 event identifies repeated blocks of one tag. */
+    /* 每个数据块独立采集，具有自己的时间戳起点。
+     * 停止采样后再导出，避免串口活动干扰
+     * 下一个数据块；995 事件用于标识同一标签下的重复数据块。 */
     if (g_adc_diag_block < ADC_DIAG_BLOCKS) { return; }
     g_adc_diag_block = 0U;
     g_adc_diag_phase++;
@@ -1165,7 +1165,7 @@ static void Devices_Initialize(void)
 
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
-    /* AD7682 external REF is 5 V, independent of MCU VDDA (3.3 V). */
+    /* AD7682 外部参考电压为 5 V，与 MCU 的 VDDA（3.3 V）独立。 */
     g_adc_status = AD7682_Init(&g_ad7682, &hspi1, AD7682_REFERENCE_VOLTS);
     if (g_adc_status == AD7682_OK) { break; }
     HAL_Delay(10U);
@@ -1265,7 +1265,7 @@ static void BatteryLed_Update(float voltage)
   float high_threshold;
   float low_threshold;
 
-  /* Wait for a plausible successful startup reading before latching. */
+  /* 等待启动读取成功且数值合理后再锁存。 */
   if (!(voltage >= 0.0f)) { return; }
   if (cell_count == 0U)
   {
@@ -1298,8 +1298,8 @@ static void BatteryLed_Update(float voltage)
   }
 }
 
-/* DMA drains RDR even while ADC masks CPU interrupts. HT/TC callbacks do
- * not parse commands; the main loop consumes the circular buffer. */
+/* ADC 屏蔽 CPU 中断时 DMA 仍会读取 RDR；半传输和全传输回调
+ * 不解析命令，由主循环消费循环缓冲区。 */
 static HAL_StatusTypeDef Serial_StartReceive(void)
 {
   g_uart_dma_read = 0U;
@@ -1321,8 +1321,8 @@ static void Serial_PollReceive(void)
   __disable_irq();
   wraps = g_uart_dma_wraps;
   remaining = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);
-  /* Include a completed lap whose DMA IRQ has not run yet. DMA itself
-   * continues during this short snapshot; read CNDTR again after TC. */
+  /* 计入 DMA 中断尚未处理的已完成一圈；这个短暂快照期间 DMA 本身
+   * 仍继续运行，因此检测到传输完成后再次读取 CNDTR。 */
   if (__HAL_DMA_GET_FLAG(&hdma_usart1_rx, DMA_FLAG_TC1) != RESET)
   {
     wraps++;
@@ -1347,7 +1347,7 @@ static void Serial_PollReceive(void)
     g_uart_rx_count++;
     if (byte == '\r' || byte == '\n')
     {
-      /* Ignore an empty CR/LF, so CRLF and multiple queued lines work. */
+      /* 忽略空的回车或换行，使 CRLF 和多行排队输入均可正常工作。 */
       if (g_uart_line_length != 0U || g_uart_line_overflow != 0U)
       {
         g_uart_line[g_uart_line_length] = 0;
@@ -1371,7 +1371,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     if (huart->ErrorCode & HAL_UART_ERROR_FE) { g_uart_frame_errors++; }
     if (huart->ErrorCode & HAL_UART_ERROR_ORE) { g_uart_overrun_errors++; }
     if (huart->ErrorCode & HAL_UART_ERROR_NE) { g_uart_noise_errors++; }
-    /* The DMA abort completion also calls here; recover only in main. */
+    /* DMA 中止完成时也会调用这里；仅在主循环中恢复。 */
     g_uart_rx_restart = 1U;
   }
 }
@@ -1434,7 +1434,7 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
   dt->year=yy;dt->month=mo;dt->day=da;dt->hours=hh;dt->minutes=mi;dt->seconds=se;dt->weekday=Serial_Weekday(year,mo,da);dt->century=0U;return 1;
 }
 
-/* Seconds since 2000-01-01; the logger stores years 2000..2099. */
+/* 自 2000-01-01 起的秒数；记录器存储 2000～2099 年。 */
 static uint32_t Serial_DateTimeSeconds(const PCF8563_DateTime *dt)
 {
   uint32_t days = 0U;
@@ -1510,7 +1510,7 @@ static void Serial_StartLogDump(const char *command)
   if (filtered)
   {
     const char *separator = strchr(text, ' ');
-    /* The first space separates date and clock; the second separates bounds. */
+    /* 第一个空格分隔日期和时间，第二个空格分隔起止范围。 */
     if (separator != NULL) { separator = strchr(separator + 1U, ' '); }
     if (separator == NULL ||
         !Serial_ParseDumpTime(text, (size_t)(separator - text), &start) ||
@@ -1521,7 +1521,7 @@ static void Serial_StartLogDump(const char *command)
       return;
     }
   }
-  /* Validate before replacing an active export; then take a sequence snapshot. */
+  /* 先校验，再替换正在进行的导出，随后保存序号快照。 */
   g_dump_time_filtered = filtered;
   g_dump_hpa = hpa;
   g_dump_start_time = start;
@@ -1549,9 +1549,9 @@ static void Serial_StartLogDump(const char *command)
   else if ((filtered || hpa) && g_dump_remaining == 0U) { Serial_PrintDumpResult(); }
 }
 
-/* Manufacturer table: 0.5V=35kPa, 4.5V=135kPa.
- * Convert only for export, preserving stored codes and invalid-value semantics.
- * Do not clamp: the table also lists 0V=22.5kPa and 5V=147.5kPa. */
+/* 厂家表格给出 0.5 V=35 kPa、4.5 V=135 kPa。
+ * 仅在导出时换算，保持存储码值和无效值语义不变。
+ * 不进行钳位：表格还给出 0 V=22.5 kPa、5 V=147.5 kPa。 */
 static float Serial_AdcPressureHpa(float code)
 {
   if (!(code >= 0.0f && code < 65535.0f)) { return SENSOR_INVALID_FLOAT; }
@@ -1569,10 +1569,10 @@ static void Recording_ApplySavedConfig(void)
   __set_PRIMASK(primask);
 }
 
-/* SW2 PB4 / SW3 PB5: schematic BUTTON1/BUTTON2, external pull-up,
- * switch to ground. Poll in main loop, never access SPI/Flash from an ISR. */
-/* Called only by TIM14 at 1 kHz.  It does not touch the menu, display or
- * Flash; it only debounces PB4/PB5 and latches a compact event bit. */
+/* SW2 接 PB4、SW3 接 PB5，对应原理图 BUTTON1/BUTTON2，外部上拉，
+ * 按下接地；在主循环轮询，绝不在中断中访问 SPI 或 Flash。 */
+/* 仅由 TIM14 以 1 kHz 调用，不访问菜单、显示屏或
+ * Flash，只对 PB4/PB5 消抖并锁存简短的事件位。 */
 void Application_KeyScan1ms(void)
 {
   static uint8_t raw_state[2];
@@ -1649,8 +1649,8 @@ static void Ui_Process(void)
   else if ((events & UI_KEY_UP_SHORT) != 0U) { up = 1U; }
   if ((events & UI_KEY_DOWN_LONG) != 0U) { down = 2U; }
   else if ((events & UI_KEY_DOWN_SHORT) != 0U) { down = 1U; }
-  /* Serial setting owns the configuration until exit; discard unsaved UI draft.
-   * Key states are still consumed, avoiding delayed actions on exit. */
+  /* 串口设置模式在退出前拥有配置控制权，丢弃界面中未保存的草稿。
+   * 仍消费按键状态，避免退出时触发积压动作。 */
   if (g_rtc_setting_mode || g_dump_remaining)
   { g_ui_active=0U; return; }
   if (up && down) { return; }
@@ -1669,7 +1669,7 @@ static void Ui_Process(void)
   {
     uint8_t timer_changed = (uint8_t)(g_ui_recording != DataLogger_GetRecordingEnabled() ||
                                      g_ui_interval != DataLogger_GetIntervalMs());
-    /* One shared configuration record, not one write for every button press. */
+    /* 共用一条配置记录，不是每次按键都写入。 */
     if (DataLogger_SetMenuConfig(g_ui_display,g_ui_recording,g_ui_order,g_ui_interval)==HAL_OK)
     {
       if (timer_changed) { Recording_ApplySavedConfig(); }
@@ -1709,7 +1709,7 @@ static void Ui_Process(void)
         if (!g_ui_clear_confirm) { g_ui_clear_confirm=1U; }
         else
         {
-          /* Same clear API as serial; calibration and menu settings survive. */
+          /* 使用与串口相同的清除接口，保留校准值和菜单设置。 */
           g_ui_message=DataLogger_Clear(3000U)==HAL_OK?"LOGS CLEARED":"CLEAR ERROR RETRY";
           g_ui_clear_confirm=0U;
         }
@@ -1753,7 +1753,7 @@ static void Serial_BatteryCommand(const char *command)
     { Serial_Write("BATTERY CAL ERROR: use battery cal 2.500..8.600 (actual battery volts)\r\n"); return; }
     if (!g_battery_valid || HAL_GetTick()-g_battery_valid_tick>2000U || g_battery_nominal<=0.0f)
     { Serial_Write("BATTERY CAL ERROR: no fresh ADC reading\r\n"); return; }
-    /* Always refer to uncalibrated filtered voltage; repeat calibration does not compound gain. */
+    /* 始终使用未经校准的滤波电压，重复校准不会叠加增益。 */
     gain=actual/g_battery_nominal;
     if (!(gain>=0.5f && gain<=1.5f))
     { Serial_Write("BATTERY CAL ERROR: gain outside 0.5..1.5; check divider/reference\r\n"); return; }
@@ -1771,7 +1771,7 @@ static void Serial_BatteryCommand(const char *command)
     (double)(g_battery_valid ? g_pending_record.battery_voltage : SENSOR_INVALID_FLOAT));
   Serial_Write(line);
 }
-/* Parse seconds exactly at half-second resolution, without scanf/float rounding. */
+/* 以半秒分辨率精确解析秒数，避免 scanf 或浮点舍入。 */
 static uint8_t Serial_ParseIntervalMs(const char *text, uint32_t *result)
 {
   uint32_t seconds=0U;
@@ -1863,7 +1863,7 @@ static void Serial_ProcessCommand(void)
       Serial_Write("ADC PROBE ERROR: use adcprobe 0..3 without log dump\r\n");
       return;
     }
-    /* Stop the normal ISR before reusing its filter storage. */
+    /* 复用滤波器存储之前先停止正常采样中断。 */
     TIM3->CR1 = 0U;
     g_adc_normal_enabled = 0U;
     TIM3->SR = 0U;
@@ -2190,9 +2190,9 @@ static uint8_t Pressure_IsValid(float pressure_hpa)
   return (uint8_t)(pressure_hpa > 0.0f && pressure_hpa < 2000.0f);
 }
 
-/* 100-point temporal median followed by two cascaded first-order lowpasses.
- * Each pole has tau=0.2 s at 100 Hz. Short outliers remain median-rejected;
- * sustained steps remain trackable, with smoothing delay (not hard clipping). */
+/* 100 点时间中值滤波后串联两级一阶低通。
+ * 在 100 Hz 下每级时间常数为 0.2 秒，中值滤波剔除短暂异常值；
+ * 持续阶跃仍可跟踪，只产生平滑延迟，不进行硬限幅。 */
 static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
 {
   uint16_t temp;
@@ -2204,14 +2204,14 @@ static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
   count = filter->count;
   if (count == ADC_FILTER_WINDOW)
   {
-    /* Remove one occurrence of the outgoing raw code from the sorted set. */
+    /* 从有序集合中删除一个移出窗口的原始码值。 */
     temp = filter->values[filter->next];
     for (i = 0U; i < count && filter->sorted[i] != temp; i++) { }
     for (; i + 1U < count; i++) { filter->sorted[i] = filter->sorted[i + 1U]; }
     count--;
   }
-  /* Maintain the sorted window in O(window), avoiding a 100x100 re-sort in
-   * the ISR. The ring stores time order; sorted[] stores the same multiset. */
+  /* 以窗口长度的线性复杂度维护有序窗口，避免在中断中
+   * 进行 100×100 的重新排序；环形缓冲区保留时间顺序，sorted[] 存储相同的多重集合。 */
   i = count;
   while (i > 0U && filter->sorted[i - 1U] > sample)
   {
@@ -2229,7 +2229,7 @@ static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
     median_twice = (uint32_t)filter->sorted[count / 2U] +
                      filter->sorted[count / 2U - 1U];
   }
-  /* Warm up with actual medians, never zero-fill the lowpass stages. */
+  /* 使用实际中值预热，绝不用零填充低通级。 */
   if (count < ADC_FILTER_WINDOW)
   {
     return (float)median_twice * 0.5f;
@@ -2250,8 +2250,8 @@ static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
   return filter->lowpass2;
 }
 
-/* Snapshot filtered ADC codes at the configured deadline; RTC and flash I/O
- * remain in the main loop so they cannot stretch the 100 Hz timer period. */
+/* 在配置的记录时刻保存滤波 ADC 码值快照；RTC 和 Flash 读写
+ * 仍在主循环中执行，避免拉长 100 Hz 定时周期。 */
 static void RecordCaptureDue(void)
 {
   uint32_t now = g_record_timer_milliseconds;
@@ -2261,8 +2261,8 @@ static void RecordCaptureDue(void)
   uint32_t primask;
   if (g_recording_enabled == 0U || interval == 0U ||
       (now - g_record_last_millisecond) < interval) { return; }
-  /* Never create initial records from zero-initialized buffers. After the
-   * first real window, SPI failures retain the last measured filtered code. */
+  /* 绝不使用初始化为零的缓冲区生成初始记录；建立
+   * 首个真实窗口后，SPI 失败时保留上次实测滤波码值。 */
   for (channel = 0U; channel < 4U; channel++)
   {
     if (g_adc_temporal_filters[channel].count < ADC_FILTER_WINDOW) { return; }
@@ -2279,9 +2279,9 @@ static void RecordCaptureDue(void)
   g_record_due = 1U;
 }
 
-/* Keep one pending record. If flash takes longer than an interval, the next
- * deadline replaces it with the newest filtered values rather than replaying
- * stale samples as if they were taken on time. */
+/* 保留一条待写记录；Flash 操作超过一个记录间隔时，下次
+ * 记录时刻用最新滤波值替换，避免将过期样本重新写入
+ * 并误认为它们是按时采集的数据。 */
 static void RecordWritePending(void)
 {
   DataLogger_Sample sample;
@@ -2459,9 +2459,9 @@ static void Samples_ProcessAndOutput(void)
                       Pressure_IsValid(u11_pressure)) ?
                      ((u7_pressure + u11_pressure) * 0.5f) :
                      SENSOR_INVALID_FLOAT;
-  /* Serve the timer-latched record before formatting/transmitting telemetry. */
+  /* 格式化或发送遥测之前，先处理定时器锁存的记录。 */
   RecordWritePending();
-  /* Do not print power-up zeros or partially warmed filters as measurements. */
+  /* 不要将上电初始零值或尚未完全预热的滤波结果作为测量值输出。 */
   if (Application_AdcGetSnapshot(adc, adc_raw) == 0U) { return; }
   if (!g_ui_active && SSD1306_BeginFrame(HAL_GetTick()))
   {
@@ -2473,7 +2473,7 @@ static void Samples_ProcessAndOutput(void)
     if (DataLogger_GetDisplayAdcOnly())
     {
     SSD1306_SetDashboard();
-    /* Read RTC at most once per second. Never freeze an old time on failure. */
+    /* 每秒最多读取一次 RTC，读取失败时不能一直沿用旧时间。 */
     if (!rtc_attempted || now-rtc_tick >= 1000U)
     {
       rtc_attempted=1U;

@@ -55,8 +55,8 @@ def sample_values(payload: str, historical: bool = False) -> list[str]:
         if any(value != int(value) for value in numbers[:6]):
             raise ValueError("无效日期时间")
         datetime(*map(int, numbers[:6]))
-    # VOFA parses FireWater as float32 before displaying/exporting three decimals.
-    # e.g. firmware's 41771.30 becomes 41771.30078125 -> CSV 41771.301.
+    # VOFA 先将 FireWater 解析为 float32，再显示或导出三位小数。
+    # 例如固件的 41771.30 转为 41771.30078125，最终 CSV 为 41771.301。
     return [f"{struct.unpack('<f', struct.pack('<f', value))[0]:.3f}" for value in numbers]
 
 
@@ -97,7 +97,7 @@ class ReliableReceiver:
             line = bytes(line).rstrip(b"\r")
             if not line:
                 continue
-            # A partial previous transmit can precede the next @D after resync.
+            # 重新同步后，下一个 @D 之前可能残留上次不完整的发送内容。
             marker = line.find(b"@D,")
             if marker >= 0:
                 line = line[marker:]
@@ -122,7 +122,7 @@ class ReliableReceiver:
                     continue
                 try:
                     text = payload.decode("ascii")
-                    # accept() writes the row and checks counts before ACK.
+                    # accept() 先写入数据行并核对计数，然后才发送确认。
                     self.accept(text)
                 except (ValueError, UnicodeError, OverflowError) as exc:
                     self.reject(f"内容错误：{exc}")
@@ -168,7 +168,7 @@ class Capture:
             if self.columns != len(values):
                 raise ValueError("同一 CSV 中不能混入不同列数的数据")
             self.writer.writerow(values)
-            self.file.flush()  # Commit to OS before acknowledging this frame.
+            self.file.flush()  # 向操作系统提交数据后才确认此帧。
             self.rows += 1
         return values
 
@@ -179,7 +179,7 @@ class Capture:
             self.close()
             self.complete = read_errors == 0
             if self.complete and self.target:
-                # .part and target share a directory, so finalization is atomic.
+                # .part 文件与目标文件位于同一目录，因此最终替换为原子操作。
                 os.replace(self.path, self.target)
                 self.path = self.target
 
@@ -217,5 +217,5 @@ class Capture:
                 os.fsync(output.fileno())
             os.replace(staging, destination)
         except BaseException:
-            # Do not remove a .writing file created by another process.
+            # 不要删除其他进程创建的 .writing 文件。
             raise

@@ -270,8 +270,8 @@ class App:
                 self.canvas.create_line(*coordinates, fill=color, width=2)
 
     def poll(self):
-        # Bound each pump: a producer can refill the queue faster than Tk can
-        # render it during long dumps. Always yield back to the window loop.
+        # 限制每次队列处理量：长时间导出时，生产者填充队列的速度可能超过 Tk
+        # 的渲染速度，因此必须始终让出执行权给窗口事件循环。
         deadline = time.monotonic() + 0.015
         try:
             for _ in range(80):

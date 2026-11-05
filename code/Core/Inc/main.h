@@ -27,11 +27,11 @@ extern "C" {
 /* 头文件包含。 */
 #include "stm32g0xx_hal.h"
 
-/* Other sensors/telemetry request period; ADC has its own 100 Hz TIM3 ISR. */
+/* 其他传感器和遥测的请求周期；ADC 使用独立的 100 Hz TIM3 中断。 */
 #define SENSOR_SAMPLE_PERIOD_MS 20U
 
-/* 1 ms timer key scanner events.  The ISR only debounces and latches these
- * bits; menu actions remain in the foreground loop. */
+/* 1 ms 定时按键扫描事件，中断只负责消抖并锁存这些
+ * 事件位；菜单操作仍在主循环中执行。 */
 #define UI_KEY_UP_SHORT       0x01U
 #define UI_KEY_UP_LONG        0x02U
 #define UI_KEY_DOWN_SHORT     0x04U

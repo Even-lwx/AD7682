@@ -86,7 +86,7 @@ class Device:
             command = f"log {kind} {value}"
         self.phase = "config_apply"
         self.deadline = time.monotonic() + 10
-        self.line(command)  # Never automatically retry destructive/config commands.
+        self.line(command)  # 绝不自动重试破坏性命令或配置命令。
 
     def finish_config(self, success, message, info=None):
         self.config = None
@@ -174,8 +174,8 @@ class Device:
             done_rows = self.capture.rows
             self.phase = ""
             self.dump = None
-            # Leave setting mode with a fresh live spool. The historical
-            # capture is closed and must never receive later live frames.
+            # 退出设置模式时使用新的实时记录文件。历史
+            # 采集文件已经关闭，后续实时帧不能写入该文件。
             self.spool()
             self.line("exit")
             self.event("done", (done_complete, done_path, done_rows))

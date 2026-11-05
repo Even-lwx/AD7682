@@ -1,4 +1,4 @@
-# OS/editor metadata
+# 操作系统和编辑器元数据
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -8,7 +8,7 @@ desktop.ini
 *.bak
 ~$*
 
-# Keil MDK / ARM compiler generated output
+# Keil MDK 和 ARM 编译器生成的输出
 code/MDK-ARM/DebugConfig/
 code/MDK-ARM/RTE/
 code/MDK-ARM/code/
@@ -27,11 +27,11 @@ code/MDK-ARM/**/*.scvd
 code/MDK-ARM/**/*.htm
 code/MDK-ARM/**/*.lnp
 
-# Keil user-specific workspace files
+# Keil 本机工作区设置
 code/MDK-ARM/*.uvguix.*
 code/MDK-ARM/*.uvoptx
 
-# Altium generated history, previews, logs and output folders
+# Altium 生成的历史、预览、日志和输出目录
 **/History/
 **/__Previews/
 **/Project Logs*/
@@ -39,7 +39,7 @@ code/MDK-ARM/*.uvoptx
 .codex-build/
 .codex-finalizer/
 
-# Temporary analysis/export artifacts
+# 临时分析和导出产物
 tmp_*.pdf
 tmp_*.txt
 tmp/
@@ -54,5 +54,5 @@ assets/
 analysis_output*/
 **/log/
 
-# Local measurement workbooks
+# 本地测量工作簿
 LP5907_3-2V电压变化.xlsx

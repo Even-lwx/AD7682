@@ -33,7 +33,7 @@ extern LPS22HH_Device g_lps22hh_u11;
 HAL_StatusTypeDef LPS22HH_Init(SoftI2C_HandleTypeDef *handle, uint32_t timeout);
 HAL_StatusTypeDef LPS22HH_InitDevice(SoftI2C_HandleTypeDef *handle,
                                      LPS22HH_Device *device, uint32_t timeout);
-/* Diagnostic controls: stop ODR conversions while preserving CTRL_REG1 for restore. */
+/* 诊断控制：停止 ODR 转换，同时保留 CTRL_REG1 以便恢复。 */
 HAL_StatusTypeDef LPS22HH_SetPowerDown(SoftI2C_HandleTypeDef *handle,
                                        const LPS22HH_Device *device,
                                        uint8_t *saved_ctrl_reg1,
@@ -66,3 +66,4 @@ HAL_StatusTypeDef LPS22HH_ReadIdAtAddress(SoftI2C_HandleTypeDef *handle,
                                            uint32_t timeout);
 
 #endif
+

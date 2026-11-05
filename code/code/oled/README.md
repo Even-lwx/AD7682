@@ -1,4 +1,4 @@
-# SSD1306 128×64 SPI OLED
+# SSD1306 128×64 SPI OLED 显示屏
 
 控制器由用户确认是 SSD1306；新版原理图中仅有 7 针排母。
 原理图：`pcb/AD7682-Ver1.2-ADC供电传感器供电改为5V/Sheet1.SchDoc`。

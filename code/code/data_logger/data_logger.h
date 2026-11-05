@@ -15,7 +15,7 @@ typedef struct
     float pressure_u7_hpa;
     float pressure_u11_hpa;
     float battery_voltage;
-    float adc[4]; /* Filtered ADC codes; new Flash records preserve 0.1 code. */
+    float adc[4]; /* 滤波后的 ADC 码值；新的 Flash 记录保留 0.1 码精度。 */
 } DataLogger_Sample;
 
 HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout);
@@ -30,12 +30,12 @@ HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
                                                 uint32_t timeout);
 HAL_StatusTypeDef DataLogger_SetRecordingEnabled(uint8_t enabled);
 uint8_t DataLogger_GetRecordingEnabled(void);
-/* Battery single-point gain, persisted in MCU config page. log clear preserves it. */
+/* 电池单点增益，保存在 MCU 配置页中。log clear 不会清除该值。 */
 float DataLogger_GetBatteryGain(void);
 HAL_StatusTypeDef DataLogger_SetBatteryGain(float gain);
 uint8_t DataLogger_GetDisplayAdcOnly(void);
-/* One MCU Flash record for all menu settings; interval in ms, multiples of 500.
- * Preserves battery calibration; 500..86400000 ms (0.5 seconds..24 hours). */
+/* 所有菜单设置共用一条 MCU Flash 记录；间隔单位为 ms，且为 500 的倍数。
+ * 保留电池校准值；范围为 500～86400000 ms（0.5 秒～24 小时）。 */
 HAL_StatusTypeDef DataLogger_SetMenuConfig(uint8_t adc_only, uint8_t recording,
                                          uint8_t newest_first, uint32_t interval);
 uint32_t DataLogger_Count(void);
@@ -48,3 +48,4 @@ uint32_t DataLogger_GetIntervalMs(void);
 uint8_t DataLogger_GetDumpNewestFirst(void);
 
 #endif /* DATA_LOGGER_H */
+

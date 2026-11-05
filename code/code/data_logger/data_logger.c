@@ -14,7 +14,7 @@
 #define LOGGER_VERSION          2U
 #define LOGGER_FRACTION_VERSION 3U
 #define LOGGER_BATTERY_VERSION  1U
-#define LOGGER_DEFAULT_INTERVAL 60000UL /* milliseconds */
+#define LOGGER_DEFAULT_INTERVAL 60000UL /* 毫秒 */
 
 /* STM32G031C8 内部 Flash 为 64 KiB，最后 2 KiB 页面用于保存日志配置；
  * MDK 的 IROM 区域已相应缩短。 */
@@ -162,14 +162,14 @@ static uint8_t Logger_LoadConfig(void)
             {
                 g_logger_dump_newest_first = config[12];
             }
-            /* Reserved byte in v1: legacy 0xFF keeps automatic logging on. */
+            /* v1 中的保留字节：旧版本的 0xFF 表示保持自动记录开启。 */
             g_logger_recording_enabled = config[13] <= 1U ? config[13] : 1U;
             g_display_adc_only = config[14] <= 1U ? config[14] : 0U;
             if (Logger_Get32(&config[20]) >= 500UL &&
                 Logger_Get32(&config[20]) <= 86400000UL &&
                 Logger_Get32(&config[20]) % 500UL == 0U)
             { g_logger_interval = Logger_Get32(&config[20]); }
-            /* Reserved bytes of config v1: old erased value means unity. */
+            /* v1 配置中的保留字节：旧的擦除值表示使用默认值。 */
             g_battery_gain_ppm = Logger_Get32(&config[16]);
             if (g_battery_gain_ppm < 500000UL || g_battery_gain_ppm > 1500000UL)
             { g_battery_gain_ppm = 1000000UL; }
@@ -229,7 +229,7 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
     config[2] = LOGGER_CONFIG_VERSION;
     g_logger_config_sequence++;
     Logger_Put32(&config[4], g_logger_config_sequence);
-    /* Legacy seconds retained for downgrade; precise interval in reserved bytes. */
+    /* 保留旧版秒数以便降级兼容，精确间隔保存在保留字节中。 */
     Logger_Put32(&config[8], g_logger_interval < 1000UL ? 1UL : g_logger_interval / 1000UL);
     Logger_Put32(&config[20], g_logger_interval);
     config[12] = g_logger_dump_newest_first;
@@ -259,9 +259,9 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
     return status;
 }
 
-/* V4 keeps the 32-byte record and integer ADC codes in bytes 22..29. The 28
- * formerly fractional bits hold 12-bit battery voltage (0.01 V, to 40.95 V)
- * plus four 4-bit ADC tenths. V2/V3 records remain decodable. */
+/* V4 保持 32 字节记录，ADC 整数码保存在字节 22～29。原先的 28 位
+ * 小数字段改为保存 12 位电池电压（精度 0.01 V，上限 40.95 V）
+ * 以及四组 4 位 ADC 十分位；仍可解码 V2/V3 记录。 */
 static void Logger_PutPackedData(uint8_t *r, uint32_t packed)
 {
     r[3] = (uint8_t)packed;
@@ -715,3 +715,4 @@ uint8_t DataLogger_GetDumpNewestFirst(void)
 {
     return g_logger_dump_newest_first;
 }
+

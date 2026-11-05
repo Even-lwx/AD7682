@@ -13,14 +13,14 @@ df['time']=pd.to_datetime(dict(year=df.I0.astype(int),month=df.I1.astype(int),da
 df=df.sort_values('time').set_index('time')
 start=pd.Timestamp('2026-10-30 14:00:00'); end=pd.Timestamp('2026-10-30 14:12:11')
 d=df.loc[(df.index>=start)&(df.index<=end)].copy()
-# columns and display names
+# 数据列与显示名称
 names={'I6':'温度 (°C)','I7':'湿度 (%)','I8':'U7数字气压 (hPa)','I9':'U11数字气压 (hPa)','I10':'IN0模拟气压 (ADC码)','I12':'IN2模拟气压 (ADC码)','I14':'电池电压 (V)'}
 plt.rcParams['font.sans-serif']=['Microsoft YaHei','SimHei','DejaVu Sans']; plt.rcParams['axes.unicode_minus']=False
 
 def savefig(fig, name):
     p=out/name; fig.savefig(p,dpi=160,bbox_inches='tight'); plt.close(fig)
     return base64.b64encode(p.read_bytes()).decode()
-# 1 pressure aligned
+# 第一部分：压力数据对齐
 fig,axs=plt.subplots(2,1,figsize=(15,9),sharex=True,gridspec_kw={'height_ratios':[1.2,1]})
 ax=axs[0]
 for c,label,color in [('I8','U7数字气压','tab:blue'),('I9','U11数字气压','tab:orange')]: ax.plot(d.index,d[c],lw=1.3,label=label,color=color)
@@ -31,25 +31,25 @@ ax2.set_ylabel('ADC码'); ax2.set_xlabel('时间'); ax2.grid(alpha=.25); ax2.leg
 for a in axs:
   for x in [pd.Timestamp('2026-10-30 14:11:10'),pd.Timestamp('2026-10-30 14:12:11')]: a.axvline(x,color='k',ls='--',lw=.8,alpha=.6)
 fig.autofmt_xdate(); p1=savefig(fig,'裁剪区间_四路气压对比.png')
-# 2 other sensors
+# 第二部分：其他传感器
 fig,axs=plt.subplots(2,1,figsize=(15,7),sharex=True)
 axs[0].plot(d.index,d.I6,label='温度',color='tab:red'); axs[0].set_ylabel('°C'); axs[0].grid(alpha=.25); axs[0].legend()
 axs[1].plot(d.index,d.I7,label='湿度',color='tab:purple'); axs[1].set_ylabel('%'); axs[1].set_xlabel('时间'); axs[1].grid(alpha=.25); axs[1].legend(); fig.autofmt_xdate(); p2=savefig(fig,'裁剪区间_温湿度.png')
-# 3 formal cycles zoom
+# 第三部分：正式测试周期局部放大
 cycles=[('第1次',pd.Timestamp('2026-10-30 14:06:39'),pd.Timestamp('2026-10-30 14:06:47')),('第2次',pd.Timestamp('2026-10-30 14:07:55'),pd.Timestamp('2026-10-30 14:08:09')),('第3次',pd.Timestamp('2026-10-30 14:09:11'),pd.Timestamp('2026-10-30 14:09:37'))]
 fig,axs=plt.subplots(3,1,figsize=(15,10),sharey=False)
 for ax,(lab,a,b) in zip(axs,cycles):
   q=d.loc[(d.index>=a-pd.Timedelta(seconds=10))&(d.index<=b+pd.Timedelta(seconds=10))]
   ax.plot(q.index,q.I8,label='U7',lw=1.5); ax.plot(q.index,q.I9,label='U11',lw=1.2); ax.set_title(f'{lab}：{a.time()}–{b.time()}'); ax.grid(alpha=.25); ax.legend(ncol=2)
 fig.autofmt_xdate(); p3=savefig(fig,'正式三次循环放大.png')
-# metrics cycles
+# 各周期统计指标
 metric_rows=[]
 for lab,a,b in cycles:
  q=d.loc[(d.index>=a)&(d.index<=b)]
  row={'循环':lab,'开始':a.strftime('%H:%M:%S'),'结束':b.strftime('%H:%M:%S'),'持续(s)':round((b-a).total_seconds(),1)}
  for c in ['I8','I9','I10','I12']:
   row[c+'均值']=float(q[c].mean()); row[c+'峰值']=float(q[c].max()); row[c+'谷值']=float(q[c].min())
- # correlations after standardizing for scale-independent comparison
+ # 标准化后计算相关性，避免量纲影响比较
  for dc in ['I8','I9']:
   for ac in ['I10','I12']:
    x=q[dc].to_numpy(); y=q[ac].to_numpy();
@@ -58,7 +58,7 @@ for lab,a,b in cycles:
    else:r=coef[0]=rmse=float('nan')
    row[f'{dc}-{ac} r']=r; row[f'{dc}-{ac} R²']=r*r; row[f'{dc}-{ac} RMSE']=rmse
  metric_rows.append(row)
-# HTML
+# HTML 页面
 
 def fmt(v):
  if pd.isna(v): return ''
@@ -70,7 +70,7 @@ def table(rows, keys):
  return h+'</table>'
 keys=['循环','开始','结束','持续(s)']+[c+s for c in ['I8','I9','I10','I12'] for s in ['均值','峰值','谷值']]
 cor_keys=['循环']+[f'{d}-{a} {m}' for d in ['I8','I9'] for a in ['I10','I12'] for m in ['r','R²','RMSE']]
-# visible clipped data stats
+# 可见裁剪数据的统计结果
 stats=[]
 for c,label in names.items(): stats.append({'项目':label,'最小值':d[c].min(),'最大值':d[c].max(),'平均值':d[c].mean(),'标准差':d[c].std()})
 html=f'''<!doctype html><meta charset="utf-8"><title>针筒第一次测试分析（裁剪区间）</title><style>body{{max-width:1500px;margin:25px auto;padding:20px;font:15px/1.7 Microsoft YaHei;color:#24334b}}h1{{font-size:28px}}h2{{margin-top:35px;border-bottom:2px solid #dbe5ef}}table{{border-collapse:collapse;width:100%;font-size:12px;display:block;overflow:auto}}td,th{{border:1px solid #ccd6e2;padding:6px;white-space:nowrap}}th{{background:#edf2f7}}.note{{background:#eef6fc;padding:15px;border-left:4px solid #3975ad}}.warn{{background:#fff7e6;padding:12px;border-left:4px solid #d18b00}}img{{width:100%}}</style>

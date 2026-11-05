@@ -3,18 +3,19 @@
 
 #include "stm32g0xx_hal.h"
 
-/* Ver1.2: SPI2 PA0=SCLK, PA4=DIN; PB0=CS#, PB1=D/C#, PB10=RES#. */
+/* 第 1.2 版引脚映射：SPI2 PA0=SCLK、PA4=DIN；PB0=CS#、PB1=D/C#、PB10=RES#。 */
 HAL_StatusTypeDef SSD1306_Init(SPI_HandleTypeDef *spi);
-/* Main-loop only. BeginFrame targets 10 Hz (100 ms between frame starts). */
+/* 仅允许主循环调用，BeginFrame 的目标频率为 10 Hz（帧起点间隔 100 ms）。 */
 uint8_t SSD1306_BeginFrame(uint32_t now);
-/* Immediate main-loop redraw for user input; replaces any partial old frame. */
+/* 响应用户输入时在主循环立即重绘，并替换尚未完成的旧帧。 */
 void SSD1306_BeginUiFrame(uint32_t now);
 void SSD1306_SetLine(uint8_t row, const char *text);
-/* 2x font: four 16-pixel rows, ten characters per row. Set during frame build. */
+/* 二倍字体：四行，每行高 16 像素、宽 10 个字符；在构建帧时设置。 */
 void SSD1306_SetLargeText(uint8_t enabled);
-/* Five dashboard rows with a 13-pixel pitch, double-width glyphs. */
+/* 仪表盘共五行，行距为 13 像素，字模宽度加倍。 */
 void SSD1306_SetDashboard(void);
-/* Sends at most one 128-byte page per call; no framebuffer or ISR SPI access. */
+/* 每次调用最多发送一个 128 字节页面；不使用帧缓冲区，也不在中断中访问 SPI。 */
 void SSD1306_Process(uint32_t now);
 
 #endif
+

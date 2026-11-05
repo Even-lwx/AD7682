@@ -102,7 +102,7 @@ HAL_StatusTypeDef LPS22HH_SetPowerDown(SoftI2C_HandleTypeDef *handle,
                                    1U, timeout);
     if (status != HAL_OK) { return status; }
     *saved_ctrl_reg1 = ctrl_reg1;
-    /* ODR[2:0]=000 powers down pressure/temperature conversions. */
+    /* ODR[2:0]=000 时关闭气压和温度转换。 */
     ctrl_reg1 &= (uint8_t)~0x70U;
     return LPS22HH_WriteRegister(handle, device->address,
                                  LPS22HH_REG_CTRL_REG1, ctrl_reg1, timeout);
@@ -197,3 +197,4 @@ HAL_StatusTypeDef LPS22HH_Read(SoftI2C_HandleTypeDef *handle,
     return LPS22HH_ReadDevice(handle, &g_lps22hh_u7,
                               pressure_hpa, temperature_c, timeout);
 }
+

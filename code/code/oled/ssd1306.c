@@ -2,15 +2,15 @@
 #include "w25q128.h"
 #include <string.h>
 
-/* SSD1306 Rev1.1: 8.1.3 four-wire SPI, 10.1 commands, 13.4 timing;
- * charge-pump application note: 8D/14 enables the module's internal pump.
- * SPI mode 0, MSB first, 2 MHz shared with W25Q128. No MISO/ACK exists:
- * HAL_OK confirms transmission only, not physical presence of the display. */
+/* 依据 SSD1306 第 1.1 版的 8.1.3 节四线 SPI、10.1 节命令和 13.4 节时序；
+ * 依据电荷泵应用说明，8D/14 用于启用模块内部电荷泵。
+ * SPI 模式 0，最高位先传，与 W25Q128 共用 2 MHz 总线。该接口没有 MISO 或确认信号：
+ * HAL_OK 只表示发送完成，不能证明显示屏实际连接。 */
 #define OLED_CS GPIO_PIN_0
 #define OLED_DC GPIO_PIN_1
 #define OLED_RES GPIO_PIN_10
 #define OLED_IDLE 8U
-#define OLED_FRAME_PERIOD_MS 100U /* Target 10 Hz, subject to main-loop load. */
+#define OLED_FRAME_PERIOD_MS 100U /* 目标频率为 10 Hz，实际受主循环负载影响。 */
 #define OLED_PAGE_PERIOD_MS 1U
 static SPI_HandleTypeDef *g_spi;
 static char g_lines[8][22];
@@ -20,7 +20,7 @@ static uint8_t g_large_text;
 static uint32_t g_frame_tick;
 static uint32_t g_page_tick;
 
-/* Five columns per glyph, low bit at top. Sixth column is spacing. */
+/* 每个字模占五列，低位在上方；第六列用于字间距。 */
 static const char g_chars[] = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+/%";
 static const uint8_t g_font[][5] = {
  {0,0,0,0,0},
@@ -49,13 +49,13 @@ static const uint8_t g_font[][5] = {
 static HAL_StatusTypeDef Send(uint8_t data, const uint8_t *bytes, uint16_t count)
 {
  HAL_StatusTypeDef status;
- /* Never deselect another owner's live transaction. All callers are main-loop. */
+ /* 不要取消其他模块正在进行的事务选择。所有调用者都在主循环中。 */
  if (g_spi == NULL || HAL_SPI_GetState(g_spi) != HAL_SPI_STATE_READY ||
      HAL_GPIO_ReadPin(W25Q128_CS_PORT, W25Q128_CS_PIN) == GPIO_PIN_RESET)
  { return HAL_BUSY; }
  HAL_GPIO_WritePin(GPIOB, OLED_DC, data ? GPIO_PIN_SET : GPIO_PIN_RESET);
  HAL_GPIO_WritePin(GPIOB, OLED_CS, GPIO_PIN_RESET);
- /* TIM3 ADC sampling may preempt this call for several milliseconds. */
+ /* TIM3 的 ADC 采样可能抢占本调用数毫秒。 */
  status = HAL_SPI_Transmit(g_spi, (uint8_t *)bytes, count, 25U);
  HAL_GPIO_WritePin(GPIOB, OLED_CS, GPIO_PIN_SET);
  return status;
@@ -73,8 +73,8 @@ static HAL_StatusTypeDef WritePage(uint8_t page, const uint8_t pixels[128])
 
 HAL_StatusTypeDef SSD1306_Init(SPI_HandleTypeDef *spi)
 {
- /* 128x64, page addressing, alternate COM, internal charge pump.
-  * Moderate contrast reduces OLED load; no scrolling. */
+ /* 128×64、页寻址、交替 COM 配置、内部电荷泵。
+  * 采用适中对比度降低 OLED 负载，不启用滚动。 */
  static const uint8_t init[] = {
   0xae,0xd5,0x80,0xa8,0x3f,0xd3,0x00,0x40,0x8d,0x14,
   0x20,0x02,0xa1,0xc8,0xda,0x12,0x81,0x3f,0xd9,0xf1,
@@ -90,7 +90,7 @@ HAL_StatusTypeDef SSD1306_Init(SPI_HandleTypeDef *spi)
  HAL_GPIO_WritePin(GPIOB, OLED_CS, GPIO_PIN_SET);
  HAL_Delay(100U);
  HAL_GPIO_WritePin(GPIOB, OLED_RES, GPIO_PIN_RESET);
- HAL_Delay(10U); /* Datasheet reset pulse minimum 3 us. */
+ HAL_Delay(10U); /* 数据手册规定的复位脉冲最短为 3 us。 */
  HAL_GPIO_WritePin(GPIOB, OLED_RES, GPIO_PIN_SET);
  HAL_Delay(20U);
  status = Send(0U, init, sizeof(init));
@@ -154,9 +154,9 @@ void SSD1306_Process(uint32_t now)
  { return; }
  if (g_large_text == 2U)
  {
-  /* Five dashboard rows spread over the full 64-pixel height.  A 13-pixel
-   * row pitch gives one more blank scanline between adjacent values than the
-   * previous 12-pixel pitch, while keeping the same double-width glyph. */
+  /* 仪表盘五行覆盖完整的 64 像素高度。采用 13 像素
+   * 行距，相比原先的 12 像素行距，相邻数值之间增加一行空白，
+   * 同时保持相同的双倍宽度字模。 */
   for (py=0U; py<8U; py++)
   {
    text_y=(uint8_t)(g_page*8U+py);
@@ -188,8 +188,8 @@ void SSD1306_Process(uint32_t now)
   if (g_large_text != 1U) { memcpy(&pixels[col*6U], g_font[glyph], 5U); }
   else
   {
-   /* Expand each 5x8 glyph to 10x16, with two spacing columns.
-    * Four-pixel left margin centers the 120-pixel text grid. */
+   /* 将每个 5×8 字模扩展为 10×16，另加两列间距。
+    * 左侧留出 4 像素，使 120 像素宽的文本区域居中。 */
    for (x = 0U; x < 5U; x++)
    {
     expanded = 0U;
@@ -209,8 +209,9 @@ void SSD1306_Process(uint32_t now)
  if (status == HAL_OK) { g_page++; }
  else if (status != HAL_BUSY)
  {
-  /* Drop this frame after a bus error; next frame rewrites every page. */
+  /* 总线出错后丢弃本帧；下一帧会重写所有页面。 */
   g_page = OLED_IDLE;
  }
  g_page_tick = now;
 }
+
