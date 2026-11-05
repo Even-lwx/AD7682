@@ -93,7 +93,7 @@ int test_main(void){
  UartCrc_WindowBegin();CHECK(!UartCrc_IsBusy()&&g_sequence==2&&UartCrc_WindowOpen());
  CHECK(UartCrc_Send("samples: 1,2")==HAL_OK&&!UartCrc_IsBusy());
  UartCrc_WindowEnd();CHECK(UartCrc_IsBusy()&&g_sequence==3&&tx_count==3);
- UartCrc_HandleControl(ACK1);CHECK(UartCrc_IsBusy()); /* Wrong terminal ACK ignored. */
+  UartCrc_HandleControl(ACK1);CHECK(UartCrc_IsBusy()); /* 忽略错误的结束确认。 */
  UartCrc_HandleControl(NACK3);CHECK(!UartCrc_IsBusy()&&g_sequence==1);
  CHECK(UartCrc_TakeReplay()&&!UartCrc_TakeReplay());
  UartCrc_WindowBegin();UartCrc_Send("samples: 1,2");UartCrc_WindowEnd();

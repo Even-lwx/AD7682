@@ -70,7 +70,7 @@ int test_main(void){
  CHECK(!g_sht_filter_valid&&!g_adc_temporal_filters[0]&&!g_u7_pressure_average&&!g_u11_pressure_average);
  CHECK(!TIM3->CNT&&!TIM14->CNT&&resumed==1&&!primask);
  Serial_DumpResumeSampling();CHECK(resumed==1&&g_record_timer_milliseconds==5150);
- /* Preserve originally stopped timers and tick rollover. */
+  /* 保留原先已停止的定时器状态和滴答计数回绕。 */
  TIM3->CR1=0;TIM14->CR1=1;tick=0xFFFFFFF0U;
  Serial_DumpPauseSampling();tick=0x20;Serial_DumpResumeSampling();
  CHECK(TIM3->CR1==0&&TIM14->CR1==1&&g_record_timer_milliseconds==5198);

@@ -20,8 +20,8 @@ static uint32_t g_window_sequence;
 static uint32_t g_batch_crc;
 static uint16_t g_batch_rows;
 
-/* Reflected CRC-32/ISO-HDLC, 4 bits per table lookup. Only 64 bytes of
- * read-only Flash; no RAM table and no per-bit inner loop. */
+/* 反射式 CRC-32/ISO-HDLC，每次查表处理 4 位。仅占用 64 字节只读 Flash，
+ * 不使用 RAM 表，也不执行逐位内层循环。 */
 static const uint32_t g_crc32_table[16] = {
     0x00000000UL,0x1DB71064UL,0x3B6E20C8UL,0x26D930ACUL,
     0x76DC4190UL,0x6B6B51F4UL,0x4DB26158UL,0x5005713CUL,
@@ -197,7 +197,7 @@ static void Link_Retry(void)
         g_retried = 1U;
         if (g_window_wait)
         {
-            /* Reconstruct the entire immutable window from Flash in main. */
+            /* 在主循环中从 Flash 重建完整的不可变数据窗口。 */
             g_sequence = g_window_sequence;
             g_pending = g_window_wait = 0U;
             g_window_replay = 1U;
@@ -223,8 +223,8 @@ HAL_StatusTypeDef UartCrc_Send(const char *payload)
     if (size > LINK_FRAME_SIZE - 40U) { Link_Fail(); return HAL_ERROR; }
     if (g_window_open && g_window_mode >= 2U && strncmp(payload,"samples:",8U)==0)
     {
-        /* Stream a row immediately. Only the running CRC and count stay in RAM.
-         * CRC covers exact payload bytes followed by a canonical LF. */
+        /* 立即发送一行数据。RAM 中只保留运行中的 CRC 和计数。
+         * CRC 覆盖精确的载荷字节以及结尾的标准换行符。 */
         g_batch_crc = Link_Crc32Update(g_batch_crc,payload,size);
         g_batch_crc = Link_Crc32Update(g_batch_crc,"\n",1U);
         g_batch_rows++;

@@ -45,7 +45,7 @@ typedef int HAL_StatusTypeDef;
 #define HAL_ERROR 1
 '''+struct('code/code/pcf8563/pcf8563.h','} PCF8563_DateTime;')+struct('code/code/data_logger/data_logger.h','} DataLogger_Sample;')+r'''
 static float printed_adc[4];
-/* Capture actual ADC arguments passed to formatting. */
+ /* 捕获传给格式化函数的实际 ADC 参数。 */
 static int test_snprintf(char *dest,size_t size,const char *format,...){
   size_t n=strlen(format);unsigned i;va_list args;
   if(strncmp(format,"samples:",8)==0){
@@ -192,7 +192,7 @@ int test_main(void){
   Serial_DumpLogs();CHECK(lines==1&&g_dump_remaining==4);
   while(g_dump_remaining){crc_busy=0;Serial_DumpLogs();}
   CHECK(lines==5&&g_dump_report_pending&&crc_sends==0);
-  Serial_DumpLogs();CHECK(crc_sends==0); /* Last row still awaiting ACK. */
+ Serial_DumpLogs();CHECK(crc_sends==0); /* 最后一行仍在等待确认。 */
   crc_busy=0;Serial_DumpLogs();CHECK(crc_sends==1&&crc_busy&&!g_dump_report_pending);
   reset();crc_enabled=1;count=0;Serial_StartLogDump("log dump raw");
   CHECK(g_dump_report_pending&&crc_sends==0);Serial_DumpLogs();CHECK(crc_sends==1);
