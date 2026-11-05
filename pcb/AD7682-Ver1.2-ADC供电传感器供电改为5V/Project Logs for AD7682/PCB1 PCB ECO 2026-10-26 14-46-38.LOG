@@ -1,0 +1,14 @@
+Removed Pin From Net: NetName=GND Pin=U14-1
+Removed Pin From Net: NetName=3V Pin=U14-2
+Removed Pin From Net: NetName=CLK Pin=U14-3
+Removed Pin From Net: NetName=DI Pin=U14-4
+Removed Pin From Net: NetName=OLED_RES Pin=U14-5
+Removed Pin From Net: NetName=OLED_DC Pin=U14-6
+Removed Pin From Net: NetName=OLED_CS Pin=U14-7
+Added Pin To Net: NetName=GND Pin=OLED??-1
+Added Pin To Net: NetName=3V Pin=OLED??-2
+Added Pin To Net: NetName=CLK Pin=OLED??-3
+Added Pin To Net: NetName=DI Pin=OLED??-4
+Added Pin To Net: NetName=OLED_RES Pin=OLED??-5
+Added Pin To Net: NetName=OLED_DC Pin=OLED??-6
+Added Pin To Net: NetName=OLED_CS Pin=OLED??-7

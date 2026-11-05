@@ -1,0 +1,31 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
+Build target 'code'
+compiling main.c...
+../Core/Src/main.c(84): warning:  #550-D: variable "g_record_last_second"  was set but never used
+  static uint32_t g_record_last_second;
+../Core/Src/main.c(88): warning:  #550-D: variable "g_sht_filtered_temperature"  was set but never used
+  static float g_sht_filtered_temperature;
+../Core/Src/main.c(89): warning:  #550-D: variable "g_sht_filtered_humidity"  was set but never used
+  static float g_sht_filtered_humidity;
+../Core/Src/main.c(91): warning:  #550-D: variable "g_sht_last_valid_tick"  was set but never used
+  static uint32_t g_sht_last_valid_tick;
+../Core/Src/main.c(94): warning:  #177-D: variable "g_w25q_ready"  was declared but never referenced
+  static uint8_t g_w25q_ready;
+../Core/Src/main.c(95): warning:  #177-D: variable "g_u7_pressure_average"  was declared but never referenced
+  static PressureAverage g_u7_pressure_average;
+../Core/Src/main.c(96): warning:  #177-D: variable "g_u11_pressure_average"  was declared but never referenced
+  static PressureAverage g_u11_pressure_average;
+../Core/Src/main.c(614): warning:  #177-D: function "Serial_DumpLogs"  was declared but never referenced
+  static void Serial_DumpLogs(void)
+../Core/Src/main.c(407): warning:  #177-D: function "BatteryLed_Update"  was declared but never referenced
+  static void BatteryLed_Update(float voltage)
+../Core/Src/main.c(659): warning:  #177-D: function "ShtFilter_Update"  was declared but never referenced
+  static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity)
+../Core/Src/main.c(693): warning:  #177-D: function "PressureAverage_Update"  was declared but never referenced
+  static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
+../Core/Src/main.c: 11 warnings, 0 errors
+linking...
+Program Size: Code=20284 RO-data=652 RW-data=100 ZI-data=2196  
+FromELF: creating hex file...
+"code\code.axf" - 0 Error(s), 11 Warning(s).
+Build Time Elapsed:  00:00:07

@@ -30,6 +30,13 @@ extern "C" {
 /* Other sensors/telemetry request period; ADC has its own 100 Hz TIM3 ISR. */
 #define SENSOR_SAMPLE_PERIOD_MS 20U
 
+/* 1 ms timer key scanner events.  The ISR only debounces and latches these
+ * bits; menu actions remain in the foreground loop. */
+#define UI_KEY_UP_SHORT       0x01U
+#define UI_KEY_UP_LONG        0x02U
+#define UI_KEY_DOWN_SHORT     0x04U
+#define UI_KEY_DOWN_LONG      0x08U
+
 /* 私有头文件包含。 */
 /* USER CODE BEGIN Includes */
 
@@ -52,6 +59,7 @@ extern "C" {
 
 /* 对外提供的函数声明。 */
 void Error_Handler(void);
+void Application_KeyScan1ms(void);
 
 /* USER CODE BEGIN EFP */
 

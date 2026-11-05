@@ -1,0 +1,5 @@
+Removed Pin From Net: NetName=OLED_RES Pin=R33-2
+Removed Pin From Net: NetName=OLED_RES Pin=U14-7
+Added Pin To Net: NetName=OLED_CS Pin=R33-2
+Added Pin To Net: NetName=OLED_RES Pin=U14-5
+Added Pin To Net: NetName=OLED_CS Pin=U14-7

@@ -13,7 +13,8 @@
 #define LOGGER_META_MAGIC       0x4D47U
 #define LOGGER_VERSION          2U
 #define LOGGER_FRACTION_VERSION 3U
-#define LOGGER_DEFAULT_INTERVAL 60UL
+#define LOGGER_BATTERY_VERSION  1U
+#define LOGGER_DEFAULT_INTERVAL 60000UL /* milliseconds */
 
 /* STM32G031C8 内部 Flash 为 64 KiB，最后 2 KiB 页面用于保存日志配置；
  * MDK 的 IROM 区域已相应缩短。 */
@@ -31,11 +32,13 @@ static uint32_t g_logger_meta_slot;
 static uint32_t g_logger_interval = LOGGER_DEFAULT_INTERVAL;
 static uint8_t g_logger_dump_newest_first;
 static uint8_t g_logger_recording_enabled = 1U;
+static uint32_t g_battery_gain_ppm = 1000000UL;
+static uint8_t g_display_adc_only;
 static uint32_t g_logger_config_slot;
 static uint32_t g_logger_config_sequence;
 
 /* 32 字节记录布局：
- * 0~1 魔数，2 版本/ADC小数，3 ADC小数，4~7 序号，8~13 RTC时间/ADC小数，
+ * 0~1 魔数，2~3/9~13 版本专用打包数据，4~7 序号，8~13 RTC时间/打包数据，
  * 14~15 温度（0.01 °C），16~17 湿度（0.01 %RH），18~19 U7 压力（0.1 hPa），
  * 20~21 U11 压力（0.1 hPa），22~29 ADC0~ADC3，30~31 CRC16。
  * 无效的温湿度/压力分别使用 0x8000、0xFFFF、0x8000 表示。
@@ -139,6 +142,8 @@ static uint8_t Logger_LoadConfig(void)
     g_logger_interval = LOGGER_DEFAULT_INTERVAL;
     g_logger_dump_newest_first = 0U;
     g_logger_recording_enabled = 1U;
+    g_battery_gain_ppm = 1000000UL;
+    g_display_adc_only = 0U;
     g_logger_config_slot = 0U;
     g_logger_config_sequence = 0U;
     for (slot = 0U; slot < LOGGER_CONFIG_SLOTS; slot++)
@@ -151,7 +156,7 @@ static uint8_t Logger_LoadConfig(void)
             if (Logger_Get32(&config[8]) != 0U &&
                 Logger_Get32(&config[8]) <= 86400UL)
             {
-                g_logger_interval = Logger_Get32(&config[8]);
+                g_logger_interval = Logger_Get32(&config[8]) * 1000UL;
             }
             if (config[12] <= 1U)
             {
@@ -159,6 +164,15 @@ static uint8_t Logger_LoadConfig(void)
             }
             /* Reserved byte in v1: legacy 0xFF keeps automatic logging on. */
             g_logger_recording_enabled = config[13] <= 1U ? config[13] : 1U;
+            g_display_adc_only = config[14] <= 1U ? config[14] : 0U;
+            if (Logger_Get32(&config[20]) >= 500UL &&
+                Logger_Get32(&config[20]) <= 86400000UL &&
+                Logger_Get32(&config[20]) % 500UL == 0U)
+            { g_logger_interval = Logger_Get32(&config[20]); }
+            /* Reserved bytes of config v1: old erased value means unity. */
+            g_battery_gain_ppm = Logger_Get32(&config[16]);
+            if (g_battery_gain_ppm < 500000UL || g_battery_gain_ppm > 1500000UL)
+            { g_battery_gain_ppm = 1000000UL; }
             latest_slot = slot;
             found = 1U;
         }
@@ -215,9 +229,13 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
     config[2] = LOGGER_CONFIG_VERSION;
     g_logger_config_sequence++;
     Logger_Put32(&config[4], g_logger_config_sequence);
-    Logger_Put32(&config[8], g_logger_interval);
+    /* Legacy seconds retained for downgrade; precise interval in reserved bytes. */
+    Logger_Put32(&config[8], g_logger_interval < 1000UL ? 1UL : g_logger_interval / 1000UL);
+    Logger_Put32(&config[20], g_logger_interval);
     config[12] = g_logger_dump_newest_first;
     config[13] = g_logger_recording_enabled;
+    config[14] = g_display_adc_only;
+    Logger_Put32(&config[16], g_battery_gain_ppm);
     Logger_Put16(&config[30], Logger_Crc16(config, 30U));
     address = LOGGER_CONFIG_ADDRESS + g_logger_config_slot * LOGGER_CONFIG_SIZE;
 
@@ -241,23 +259,21 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
     return status;
 }
 
-/* Fraction record v3 retains the v2 32-byte stride and sequence layout.
- * Four 7-bit hundredths (0..99) use 28 previously unused bits:
- * byte3[7:0], byte2[7:2], month[7:4], day[7:5], hours[7:5],
- * minutes[7:6], seconds[7:6]. Byte2[1:0]=3 identifies this layout.
- * Metadata stays v2, so existing logs remain discoverable and readable. */
-static void Logger_PutFractions(uint8_t *r, uint32_t fractions)
+/* V4 keeps the 32-byte record and integer ADC codes in bytes 22..29. The 28
+ * formerly fractional bits hold 12-bit battery voltage (0.01 V, to 40.95 V)
+ * plus four 4-bit ADC tenths. V2/V3 records remain decodable. */
+static void Logger_PutPackedData(uint8_t *r, uint32_t packed)
 {
-    r[3] = (uint8_t)fractions;
-    r[2] = (uint8_t)(LOGGER_FRACTION_VERSION | (((fractions >> 8U) & 63U) << 2U));
-    r[9] = (uint8_t)((r[9] & 15U) | (((fractions >> 14U) & 15U) << 4U));
-    r[10] = (uint8_t)((r[10] & 31U) | (((fractions >> 18U) & 7U) << 5U));
-    r[11] = (uint8_t)((r[11] & 31U) | (((fractions >> 21U) & 7U) << 5U));
-    r[12] = (uint8_t)((r[12] & 63U) | (((fractions >> 24U) & 3U) << 6U));
-    r[13] = (uint8_t)((r[13] & 63U) | (((fractions >> 26U) & 3U) << 6U));
+    r[3] = (uint8_t)packed;
+    r[2] = (uint8_t)(LOGGER_BATTERY_VERSION | (((packed >> 8U) & 63U) << 2U));
+    r[9] = (uint8_t)((r[9] & 15U) | (((packed >> 14U) & 15U) << 4U));
+    r[10] = (uint8_t)((r[10] & 31U) | (((packed >> 18U) & 7U) << 5U));
+    r[11] = (uint8_t)((r[11] & 31U) | (((packed >> 21U) & 7U) << 5U));
+    r[12] = (uint8_t)((r[12] & 63U) | (((packed >> 24U) & 3U) << 6U));
+    r[13] = (uint8_t)((r[13] & 63U) | (((packed >> 26U) & 3U) << 6U));
 }
 
-static uint32_t Logger_GetFractions(const uint8_t *r)
+static uint32_t Logger_GetPackedData(const uint8_t *r)
 {
     return (uint32_t)r[3] | ((uint32_t)(r[2] >> 2U) << 8U) |
            ((uint32_t)(r[9] >> 4U) << 14U) |
@@ -274,7 +290,7 @@ static void Logger_EncodeSample(const DataLogger_Sample *sample,
     uint16_t humidity = Logger_EncodeHumidity(sample->humidity_rh);
     int16_t pressure_u7 = Logger_EncodePressure(sample->pressure_u7_hpa);
     int16_t pressure_u11 = Logger_EncodePressure(sample->pressure_u11_hpa);
-    uint32_t fractions = 0U;
+    uint32_t packed = 0U;
     uint32_t fixed;
     uint8_t channel;
 
@@ -292,14 +308,25 @@ static void Logger_EncodeSample(const DataLogger_Sample *sample,
     Logger_Put16(&record[16], humidity);
     Logger_Put16(&record[18], (uint16_t)pressure_u7);
     Logger_Put16(&record[20], (uint16_t)pressure_u11);
+    fixed = (sample->battery_voltage >= 0.0f && sample->battery_voltage <= 40.94f) ?
+            (uint32_t)((double)sample->battery_voltage * 100.0 + 0.5) : 0x0FFFU;
+    packed = fixed & 0x0FFFU;
     for (channel = 0U; channel < 4U; channel++)
     {
-        fixed = (sample->adc[channel] >= 0.0f && sample->adc[channel] <= 65535.0f) ?
-                (uint32_t)((double)sample->adc[channel] * 100.0 + 0.5) : 6553500U;
-        Logger_Put16(&record[22U + 2U * channel], (uint16_t)(fixed / 100U));
-        fractions |= (fixed % 100U) << (7U * channel);
+        fixed = (sample->adc[channel] >= 0.0f && sample->adc[channel] <= 65534.9f) ?
+                (uint32_t)((double)sample->adc[channel] * 10.0 + 0.5) : 0xFFFFFFFFUL;
+        if (fixed == 0xFFFFFFFFUL)
+        {
+            Logger_Put16(&record[22U + 2U * channel], 0xFFFFU);
+            packed |= 15UL << (12U + 4U * channel);
+        }
+        else
+        {
+            Logger_Put16(&record[22U + 2U * channel], (uint16_t)(fixed / 10U));
+            packed |= (fixed % 10U) << (12U + 4U * channel);
+        }
     }
-    Logger_PutFractions(record, fractions);
+    Logger_PutPackedData(record, packed);
     Logger_Put16(&record[30], Logger_Crc16(record, 30U));
 }
 
@@ -307,10 +334,13 @@ static HAL_StatusTypeDef Logger_DecodeSample(const uint8_t record[LOGGER_RECORD_
                                              DataLogger_Sample *sample)
 {
     uint8_t fractional = (uint8_t)((record[2] & 3U) == LOGGER_FRACTION_VERSION);
+    uint8_t battery = (uint8_t)((record[2] & 3U) ==
+                                (LOGGER_BATTERY_VERSION & 3U));
     uint8_t channel;
-    uint32_t fractions = fractional != 0U ? Logger_GetFractions(record) : 0U;
+    uint32_t packed = (fractional != 0U || battery != 0U) ? Logger_GetPackedData(record) : 0U;
     if (Logger_Get16(&record[0]) != LOGGER_RECORD_MAGIC ||
-        (record[2] != LOGGER_VERSION && fractional == 0U) ||
+        (record[2] != LOGGER_VERSION && fractional == 0U &&
+         (record[2] & 3U) != LOGGER_BATTERY_VERSION) ||
         Logger_Get16(&record[30]) != Logger_Crc16(record, 30U))
     {
         return HAL_ERROR;
@@ -330,12 +360,29 @@ static HAL_StatusTypeDef Logger_DecodeSample(const uint8_t record[LOGGER_RECORD_
                               -9999.0f : (float)(int16_t)Logger_Get16(&record[18]) / 10.0f;
     sample->pressure_u11_hpa = ((int16_t)Logger_Get16(&record[20]) == (int16_t)-32768) ?
                                -9999.0f : (float)(int16_t)Logger_Get16(&record[20]) / 10.0f;
+    sample->battery_voltage = battery != 0U ?
+        (((packed & 0x0FFFU) == 0x0FFFU) ? -9999.0f :
+         (float)(packed & 0x0FFFU) / 100.0f) : -9999.0f;
     for (channel = 0U; channel < 4U; channel++)
     {
-        uint32_t fraction = (fractions >> (7U * channel)) & 127U;
-        if (fraction > 99U) { return HAL_ERROR; }
-        sample->adc[channel] = (float)Logger_Get16(&record[22U + 2U * channel]) +
-                               (float)fraction / 100.0f;
+        if (battery != 0U)
+        {
+            uint32_t tenths = (packed >> (12U + 4U * channel)) & 15U;
+            uint16_t whole = Logger_Get16(&record[22U + 2U * channel]);
+            if (whole == 0xFFFFU && tenths == 15U) { sample->adc[channel] = -9999.0f; }
+            else
+            {
+                if (tenths > 9U) { return HAL_ERROR; }
+                sample->adc[channel] = (float)whole + (float)tenths / 10.0f;
+            }
+        }
+        else
+        {
+            uint32_t fraction = (packed >> (7U * channel)) & 127U;
+            if (fraction > 99U) { return HAL_ERROR; }
+            sample->adc[channel] = (float)Logger_Get16(&record[22U + 2U * channel]) +
+                                   (float)fraction / 100.0f;
+        }
     }
     return HAL_OK;
 }
@@ -409,7 +456,8 @@ HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout)
             Logger_Get32(&meta[20]) != 0xFFFFFFFFUL &&
             Logger_Get32(&meta[20]) != 0U)
         {
-            g_logger_interval = Logger_Get32(&meta[20]);
+            g_logger_interval = Logger_Get32(&meta[20]) <= 86400UL ?
+                                  Logger_Get32(&meta[20]) * 1000UL : LOGGER_DEFAULT_INTERVAL;
             legacy_config_found = 1U;
         }
         if (config_found == 0U && meta[24] != 0xFFU)
@@ -513,17 +561,18 @@ HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout)
     return HAL_OK;
 }
 
-HAL_StatusTypeDef DataLogger_SetInterval(uint32_t seconds, uint32_t timeout)
+HAL_StatusTypeDef DataLogger_SetIntervalMs(uint32_t milliseconds, uint32_t timeout)
 {
     uint32_t previous;
     HAL_StatusTypeDef status;
 
-    if (seconds == 0U || seconds > 86400UL || g_logger_spi == NULL)
+    if (milliseconds < 500UL || milliseconds > 86400000UL ||
+        milliseconds % 500UL != 0U || g_logger_spi == NULL)
     {
         return HAL_ERROR;
     }
     previous = g_logger_interval;
-    g_logger_interval = seconds;
+    g_logger_interval = milliseconds;
     (void)timeout;
     status = Logger_SaveConfig();
     if (status != HAL_OK)
@@ -576,6 +625,56 @@ uint8_t DataLogger_GetRecordingEnabled(void)
     return g_logger_recording_enabled;
 }
 
+float DataLogger_GetBatteryGain(void)
+{
+    return (float)g_battery_gain_ppm / 1000000.0f;
+}
+
+uint8_t DataLogger_GetDisplayAdcOnly(void)
+{
+    return g_display_adc_only;
+}
+
+HAL_StatusTypeDef DataLogger_SetMenuConfig(uint8_t adc_only, uint8_t recording,
+                                         uint8_t newest_first, uint32_t interval)
+{
+    uint8_t old_display = g_display_adc_only;
+    uint8_t old_recording = g_logger_recording_enabled;
+    uint8_t old_order = g_logger_dump_newest_first;
+    uint32_t old_interval = g_logger_interval;
+    HAL_StatusTypeDef status;
+    if (adc_only > 1U || recording > 1U || newest_first > 1U ||
+        interval < 500UL || interval > 86400000UL || interval % 500UL != 0U)
+    { return HAL_ERROR; }
+    if (old_display == adc_only && old_recording == recording &&
+        old_order == newest_first && old_interval == interval) { return HAL_OK; }
+    g_display_adc_only = adc_only;
+    g_logger_recording_enabled = recording;
+    g_logger_dump_newest_first = newest_first;
+    g_logger_interval = interval;
+    status = Logger_SaveConfig();
+    if (status != HAL_OK)
+    {
+        g_display_adc_only = old_display;
+        g_logger_recording_enabled = old_recording;
+        g_logger_dump_newest_first = old_order;
+        g_logger_interval = old_interval;
+    }
+    return status;
+}
+
+HAL_StatusTypeDef DataLogger_SetBatteryGain(float gain)
+{
+    uint32_t previous = g_battery_gain_ppm;
+    HAL_StatusTypeDef status;
+    if (!(gain >= 0.5f && gain <= 1.5f)) { return HAL_ERROR; }
+    g_battery_gain_ppm = (uint32_t)(gain * 1000000.0f + 0.5f);
+    if (g_battery_gain_ppm == previous) { return HAL_OK; }
+    status = Logger_SaveConfig();
+    if (status != HAL_OK) { g_battery_gain_ppm = previous; }
+    return status;
+}
+
 uint32_t DataLogger_LastSequence(void)
 {
     return g_logger_sequence;
@@ -607,7 +706,7 @@ uint32_t DataLogger_Capacity(void)
     return LOGGER_MAX_RECORDS;
 }
 
-uint32_t DataLogger_GetInterval(void)
+uint32_t DataLogger_GetIntervalMs(void)
 {
     return g_logger_interval;
 }

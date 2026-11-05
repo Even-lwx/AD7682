@@ -1,0 +1,22 @@
+Removed Pin From Net: NetName=5V Pin=C33-2
+Removed Pin From Net: NetName=5V Pin=U11-1
+Added Pin To Net: NetName=5V_IN Pin=C33-2
+Added Pin To Net: NetName=5V_IN Pin=U11-1
+Added Member To Class: ClassName=Sheet1 Member=Component C14 cga0402x5r105k500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C15 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C16 cga0402x5r105k500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C17 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C18 cga0402x5r105k500gt
+Added Member To Class: ClassName=Sheet1 Member=Component C19 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C21 cc0402jrnpo9bn101
+Added Member To Class: ClassName=Sheet1 Member=Component C22 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C24 cc0402jrnpo9bn101
+Added Member To Class: ClassName=Sheet1 Member=Component C25 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C29 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C30 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C31 cc0402krx7r7bb104
+Added Member To Class: ClassName=Sheet1 Member=Component C32 hgc0603r5106m350nthj
+Added Member To Class: ClassName=Sheet1 Member=Component U4 tps7a2050pdbvr
+Added Member To Class: ClassName=Sheet1 Member=Component U9 fc31m2-32.768-ntlnndtl
+Added Member To Class: ClassName=Sheet1 Member=Component U10 pcf8563ts/5,118
+Added Member To Class: ClassName=Sheet1 Member=Component U12 lps22hbtr

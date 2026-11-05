@@ -51,7 +51,10 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 
   /* 配置 GPIO 输出初始电平。 */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_RESET);
+  /* Ver1.2 OLED: PB0=CS#、PB1=D/C#、PB10=RES#。
+   * 与 W25Q128 共用 SPI2，上电必须先取消 OLED 片选，避免接收 Flash 命令。 */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_10, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_RESET);
 
   /* 配置 GPIO 输出初始电平。 */
   /* PD2 为 BQ24040 充电使能控制，低电平允许充电。 */
@@ -64,8 +67,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* 配置 GPIO 引脚：PB0。 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  /* 配置 OLED 控制引脚：PB0、PB1、PB10。 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

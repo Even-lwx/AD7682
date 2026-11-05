@@ -1,0 +1,38 @@
+Added Component: Designator=U??(HDR-TH_7P-P2.54-V-F)
+Add component (AddParameter): Name = "AddInBom"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Circular Hole / Square Hole"; Value = "方孔"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ConvertToPcb"; Value = "yes"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Current Rating"; Value = "3A"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet"; Value = "https://item.szlcsc.com/datasheet/KH-2.54FH-1X7P-H8.5/3278193.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "FootprintName"; Value = "HDR-TH_7P-P2.54-V-F"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Holes Direction"; Value = "顶部"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Holes Structure"; Value = "1x7P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Insulation Height"; Value = "8.5mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "JLCPCB Part Class"; Value = "Extended Part"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LCSC Part Name"; Value = "间距:2.54mm 1x7P 直插"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer"; Value = "kinghelm(金航标)"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ManufacturerPart"; Value = "KH-2.54FH-1X7P-H8.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelId"; Value = "4c31987253bc43b9b52c17be2a6d3f91"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelName"; Value = "HDR-TH_7P-P2.54-F-LI-1X7P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ModelTransform"; Value = "715.7466,94.488,0,0,0,0,0,0,-118.11"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mounting Type"; Value = "直插"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Positions"; Value = "7P"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Number of Rows"; Value = "单排"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Operating Temperature"; Value = "-40℃~+105℃"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Pitch"; Value = "2.54mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Row Spacing"; Value = "-"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier"; Value = "LCSC"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Supplier Footprint"; Value = "插件,P=2.54mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SupplierPart"; Value = "C2932672"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Symbol"; Value = "KH-2.54FH-1X7P-H8.5"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Voltage Rating (Max)"; Value = "-"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=GND Pin=U??-1
+Added Pin To Net: NetName=3V Pin=U??-2
+Added Pin To Net: NetName=CLK Pin=U??-3
+Added Pin To Net: NetName=DI Pin=U??-4
+Added Pin To Net: NetName=PB1 Pin=U??-6
+Added Pin To Net: NetName=PB0 Pin=U??-7
+Added Pin To Net: NetName=PB10 Pin=U3-22
+Added Pin To Net: NetName=PB10 Pin=U??-5
+Added Net: Name=PB10
+Added Member To Class: ClassName=Sheet1 Member=Component U?? kh-2.54fh-1x7p-h8.5

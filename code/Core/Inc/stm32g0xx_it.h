@@ -53,6 +53,7 @@ void SysTick_Handler(void);
 /* USER CODE BEGIN EFP */
 void TIM14_IRQHandler(void);
 void TIM3_IRQHandler(void);
+void DMA1_Channel1_IRQHandler(void);
 
 /* USER CODE END EFP */
 

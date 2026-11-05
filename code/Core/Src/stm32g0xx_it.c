@@ -145,10 +145,17 @@ void USART1_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart1);
 }
+
+extern DMA_HandleTypeDef hdma_usart1_rx;
+void DMA1_Channel1_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_usart1_rx);
+}
 /* USER CODE END USART1_IRQn 0 */
 
 /* USER CODE BEGIN 1 */
 extern volatile uint32_t g_record_timer_seconds;
+extern volatile uint32_t g_record_timer_milliseconds;
 extern volatile uint16_t g_sensor_timer_milliseconds;
 extern volatile uint16_t g_sensor_sample_elapsed_ms;
 extern volatile uint8_t g_sensor_sample_request;
@@ -174,7 +181,9 @@ void TIM14_IRQHandler(void)
     TIM14->SR &= (uint32_t)~TIM_SR_UIF;
     /* TIM14 每 1 ms 进入一次；中断只更新时间基准和置位请求，
        禁止在这里执行 I2C/SPI、打印或 HAL_Delay。 */
+    Application_KeyScan1ms();
     g_sensor_timer_milliseconds++;
+    g_record_timer_milliseconds++;
     if (g_sensor_timer_milliseconds >= 1000U)
     {
       g_sensor_timer_milliseconds = 0U;

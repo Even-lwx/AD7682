@@ -1,27 +1,45 @@
 #include "battery_adc.h"
 
-/* 电池电压采集实现：支持原始 ADC、分压换算和实测单点标定三种方式。 */
+/* 电池电压采集：MCU 12-bit ADC，VDDA/VREF+ = 3.3 V。 */
 
-/* 单点标定：3493 个 ADC 计数对应实测电池电压 3.648 V。 */
-#define BATTERY_ADC_CAL_GAIN_V_PER_COUNT (0.001044374f)
+/* 分压接线：电源 -- 100 kOhm -- ADC -- 47 kOhm -- GND。
+ * MCU 参考电压已改变，旧板单点标定不再适用，按3.3 V理论值换算。
+ * AD7682 的外部5 V参考不参与此计算。 */
+#define BATTERY_DIVIDER_TOP_KOHM       100.0f
+#define BATTERY_DIVIDER_BOTTOM_KOHM     47.0f
+#define BATTERY_DIVIDER_RATIO \
+    ((BATTERY_DIVIDER_TOP_KOHM + BATTERY_DIVIDER_BOTTOM_KOHM) / \
+     BATTERY_DIVIDER_BOTTOM_KOHM)
+#define BATTERY_ADC_VREF_VOLTS          3.3f
+#define BATTERY_ADC_PIN_GAIN_V_PER_COUNT (BATTERY_ADC_VREF_VOLTS / 4095.0f)
+#define BATTERY_ADC_CAL_GAIN_V_PER_COUNT \
+    (BATTERY_ADC_PIN_GAIN_V_PER_COUNT * BATTERY_DIVIDER_RATIO)
 
 uint32_t BatteryAdc_ReadRaw(ADC_HandleTypeDef *handle, uint32_t timeout)
 {
-    /* 启动 ADC，等待一次转换，读取后及时停止 ADC。 */
-    uint32_t value;
+    uint32_t value = 0U;
+    (void)BatteryAdc_ReadRawChecked(handle, &value, timeout);
+    return value;
+}
 
-    if (HAL_ADC_Start(handle) != HAL_OK)
-    {
-        return 0U;
-    }
-    if (HAL_ADC_PollForConversion(handle, timeout) != HAL_OK)
+HAL_StatusTypeDef BatteryAdc_ReadRawChecked(ADC_HandleTypeDef *handle,
+                                          uint32_t *raw, uint32_t timeout)
+{
+    /* 启动 ADC，等待一次转换，读取后及时停止 ADC。 */
+    HAL_StatusTypeDef status;
+
+    if (handle == NULL || raw == NULL) { return HAL_ERROR; }
+    status = HAL_ADC_Start(handle);
+    if (status != HAL_OK) { return status; }
+    status = HAL_ADC_PollForConversion(handle, timeout);
+    if (status != HAL_OK)
     {
         (void)HAL_ADC_Stop(handle);
-        return 0U;
+        return status;
     }
-    value = HAL_ADC_GetValue(handle);
+    *raw = HAL_ADC_GetValue(handle);
     (void)HAL_ADC_Stop(handle);
-    return value;
+    return HAL_OK;
 }
 
 float BatteryAdc_ReadVoltage(ADC_HandleTypeDef *handle, float vref,
@@ -34,6 +52,6 @@ float BatteryAdc_ReadVoltage(ADC_HandleTypeDef *handle, float vref,
 
 float BatteryAdc_CalibratedVoltage(uint32_t raw)
 {
-    /* 使用项目实测比例直接输出电池端电压。 */
+    /* 保留接口名；现按3.3 V及100k/47k分压输出电池端电压。 */
     return (float)raw * BATTERY_ADC_CAL_GAIN_V_PER_COUNT;
 }

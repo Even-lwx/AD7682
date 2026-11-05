@@ -32,6 +32,8 @@
 #include "w25q128.h"
 #include "lps22hh.h"
 #include "data_logger.h"
+#include "ssd1306.h"
+#include "uart_crc.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -39,14 +41,22 @@
 #define BOOT_INIT_TIMEOUT 100U     /* 单次器件访问超时，单位 ms。 */
 #define SENSOR_INVALID_FLOAT (-9999.0f)
 #define SENSOR_INVALID_ADC   0xFFFFU
+#define AD7682_REFERENCE_VOLTS 5.0f
+#define UART_RX_DMA_SIZE 128U
 #define PRESSURE_AVG_WINDOW  50U
 #define SHT_AVG_WINDOW       50U
+#define BATTERY_AVG_WINDOW   50U
 #define ADC_DIAG_ROWS        96U
 #define ADC_DIAG_FIRST_PHASE 29U
 #define ADC_DIAG_PHASES      40U /* Exclusive end; this run uses phases 29..39. */
 #define ADC_DIAG_BLOCKS      3U
 #define ADC_DIAG_PERIOD_US   20000U
 #define ADC_FILTER_WINDOW    100U
+/* 100 Hz: alpha = 1-exp(-0.01/0.2), precomputed to avoid exp() in ISR. */
+#define ADC_LOWPASS_ALPHA    0.0487705755f
+#define ADC_PROBE_POINTS     288U
+#define ADC_PROBE_PHASES     6U
+#define ADC_PROBE_BLOCKS     3U
 
 /* USER CODE END Includes */
 
@@ -70,14 +80,20 @@ typedef struct
 
 typedef struct
 {
+  uint32_t cnv_us;
+  uint16_t raw;
+  uint16_t status;
+} AdcProbePoint;
+
+typedef struct
+{
   uint16_t values[ADC_FILTER_WINDOW];
   uint16_t sorted[ADC_FILTER_WINDOW];
-  uint32_t mean_values[25]; /* Twice the median, preserving half-code values. */
-  uint32_t mean_sum;
+  float lowpass1;
+  float lowpass2;
   uint8_t count;
   uint8_t next;
-  uint8_t mean_count;
-  uint8_t mean_next;
+  uint8_t lowpass_ready;
 } AdcTemporalFilter;
 
 /* USER CODE END PTD */
@@ -95,14 +111,23 @@ typedef struct
 /* 私有变量。 */
 
 /* USER CODE BEGIN PV */
-volatile uint8_t g_uart_rx_byte;
 volatile uint8_t g_uart_line_ready;
 volatile uint8_t g_uart_line_overflow;
 volatile uint8_t g_uart_rx_restart;
 volatile uint8_t g_rtc_setting_mode;
 static char g_uart_line[64];
 static uint8_t g_uart_line_length;
+static volatile uint8_t g_uart_dma_buffer[UART_RX_DMA_SIZE];
+static uint16_t g_uart_dma_read;
+static volatile uint32_t g_uart_dma_wraps;
+static uint32_t g_uart_dma_consumed;
+static uint32_t g_uart_rx_count;
+static volatile uint32_t g_uart_parity_errors;
+static volatile uint32_t g_uart_frame_errors;
+static volatile uint32_t g_uart_overrun_errors;
+static volatile uint32_t g_uart_noise_errors;
 volatile uint32_t g_record_timer_seconds;
+volatile uint32_t g_record_timer_milliseconds;
 volatile uint16_t g_sensor_timer_milliseconds;
 volatile uint16_t g_sensor_sample_elapsed_ms;
 volatile uint8_t g_sensor_sample_request;
@@ -111,11 +136,18 @@ volatile uint8_t g_adc_normal_enabled;
 volatile float g_adc_filtered_codes[4];
 volatile uint16_t g_adc_raw_codes[4];
 volatile AD7682_Status g_adc_normal_status;
-static uint32_t g_record_last_second;
+static uint32_t g_record_last_millisecond;
 static volatile uint8_t g_recording_enabled;
 static uint32_t g_dump_remaining;
 static uint32_t g_dump_sequence;
 static uint8_t g_dump_newest_first;
+static uint8_t g_dump_time_filtered;
+static uint8_t g_dump_hpa;
+static uint32_t g_dump_start_time;
+static uint32_t g_dump_end_time;
+static uint32_t g_dump_matched;
+static uint32_t g_dump_read_errors;
+static uint8_t g_dump_report_pending;
 static float g_sht_filtered_temperature;
 static float g_sht_filtered_humidity;
 static uint8_t g_sht_filter_valid;
@@ -130,11 +162,14 @@ static PressureAverage g_u11_pressure_average;
 static union
 {
   AdcDiagRow diagnostic[ADC_DIAG_ROWS];
+  AdcProbePoint probe[ADC_PROBE_POINTS];
   AdcTemporalFilter filters[4];
 } g_adc_workspace;
 #define g_adc_diag_rows (g_adc_workspace.diagnostic)
 #define g_adc_temporal_filters (g_adc_workspace.filters)
 static uint8_t g_adc_diag_active;
+static uint8_t g_adc_probe_active;
+static uint32_t g_adc_probe_random;
 static uint8_t g_adc_diag_auto_channels;
 static uint8_t g_adc_diag_channel;
 static uint8_t g_adc_diag_phase;
@@ -156,6 +191,20 @@ static uint8_t g_adc_diag_lps_ctrl[2];
 static uint8_t g_adc_diag_lps_readback[2];
 static DataLogger_Sample g_pending_record;
 static volatile uint8_t g_record_due;
+static float g_battery_nominal;
+static uint32_t g_battery_valid_tick;
+static uint8_t g_battery_valid;
+static uint8_t g_ui_active;
+static uint8_t g_ui_selected;
+static uint8_t g_ui_edit_interval;
+static uint8_t g_ui_clear_confirm;
+static uint8_t g_ui_display;
+static uint8_t g_ui_recording;
+static uint8_t g_ui_order;
+static uint32_t g_ui_interval;
+static uint8_t g_ui_dirty;
+static const char *g_ui_message;
+volatile uint8_t g_ui_key_events;
 
 /* USER CODE END PV */
 
@@ -169,22 +218,27 @@ static void Serial_DumpLogs(void);
 static void RecordTimer_Init(void);
 static uint8_t SensorSample_ConsumeRequest(void);
 static void AdcDiag_ProcessRequest(void);
+static void AdcProbe_ProcessRequest(void);
 static void AdcDiag_DumpPhase(uint8_t phase);
 static void AdcDiag_StartPhase(void);
 static void AdcDiag_StopPhase(void);
 static uint8_t AdcDiag_SetCoreClock(uint8_t mode);
 static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask);
 static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask);
-static uint8_t Serial_ParseUint32(const char *text, uint32_t *value);
 static void Serial_ProcessCommand(void);
 static void Serial_RecoverReceive(void);
+static HAL_StatusTypeDef Serial_StartReceive(void);
+static void Serial_PollReceive(void);
 static void BatteryLed_Update(float voltage);
+static void Ui_Process(void);
+static void Recording_ApplySavedConfig(void);
+static float BatteryFilter_Update(HAL_StatusTypeDef status, uint32_t raw);
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity);
 static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa);
 static uint8_t Pressure_IsValid(float pressure_hpa);
 static void RecordCaptureDue(void);
 static void RecordWritePending(void);
-void Application_AdcSample100Hz(void);
+void Application_AdcSample1000Hz(void);
 static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample);
 static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4]);
 
@@ -231,6 +285,32 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Devices_Initialize();
   (void)DataLogger_Init(&hspi2, BOOT_INIT_TIMEOUT);
+  /* OLED shares SPI2 with Flash; both chip selects were made inactive by GPIO init.
+   * No display acknowledgement exists on this write-only SPI interface. */
+  {
+    HAL_StatusTypeDef oled_status;
+    uint8_t attempt;
+    for (attempt = 0U; attempt < 3U; attempt++)
+    {
+      oled_status = SSD1306_Init(&hspi2);
+      if (oled_status == HAL_OK) { break; }
+    }
+    if (oled_status == HAL_OK)
+    {
+      /* Prove the display path before starting ADC interrupts or waiting for
+       * filters. SPI is write-only: TX OK is not an OLED acknowledgement. */
+      (void)SSD1306_BeginFrame(HAL_GetTick());
+      SSD1306_SetLine(0U, "SSD1306 READY");
+      SSD1306_SetLine(2U, "WAITING FOR SENSORS");
+      for (attempt = 0U; attempt < 8U; attempt++)
+      {
+        HAL_Delay(5U);
+        SSD1306_Process(HAL_GetTick());
+      }
+      Serial_Write("OLED SPI TX OK (NO ACK)\r\n");
+    }
+    else { Serial_Write("OLED SPI INIT TX ERROR\r\n"); }
+  }
   RecordTimer_Init();
   /* 启动阶段的串口输出完成后再开启命令接收。清理 RX 残留和错误状态，
      确保复位后的第一条命令从完整的空闲接收状态开始。 */
@@ -238,7 +318,8 @@ int main(void)
                                   UART_CLEAR_PEF | UART_CLEAR_FEF);
   __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
   huart1.ErrorCode = HAL_UART_ERROR_NONE;
-  (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
+  if (Serial_StartReceive() != HAL_OK) { Serial_Write("UART RX START ERROR\r\n"); }
+  Serial_Write("UART RX DMA128 READY: 921600 8E1 (2026-11-04)\r\n");
   /* 上电直接进入正常采样和日志流程，不再自动执行诊断阶段。 */
   g_adc_diag_channel = 0U;
   g_adc_diag_phase = 0U;
@@ -255,7 +336,7 @@ int main(void)
   g_recording_enabled = DataLogger_GetRecordingEnabled();
   g_sensor_sample_elapsed_ms = 0U;
   g_sensor_sample_request = 0U;
-  g_record_last_second = g_record_timer_seconds;
+  g_record_last_millisecond = g_record_timer_milliseconds;
   g_ad7682.acquisition_delay_us = 100U;
   g_ad7682.configured_channel_valid = 0U;
   TIM3->CNT = 0U;
@@ -271,11 +352,21 @@ int main(void)
     /* 仅显式发送 adcdiag 命令后执行；上电不会进入此分支。 */
     if (g_adc_diag_active != 0U)
     {
-      AdcDiag_ProcessRequest();
+      if (g_adc_probe_active != 0U) { AdcProbe_ProcessRequest(); }
+      else { AdcDiag_ProcessRequest(); }
       continue;
     }
     RecordWritePending();
     Serial_ProcessCommand();
+    UartCrc_Process();
+    if (UartCrc_IsFailed()) { g_dump_remaining = 0U; g_dump_report_pending = 0U; }
+    if (g_adc_diag_active == 0U) { Ui_Process(); }
+    /* Drain a page before blocking sensor reads as well as after them, so
+     * continuous 20 ms sensor requests do not stretch a frame to eight loops. */
+    if (g_adc_diag_active == 0U && g_record_due == 0U && g_dump_remaining == 0U)
+    {
+      SSD1306_Process(HAL_GetTick());
+    }
     if (SensorSample_ConsumeRequest() != 0U && g_adc_diag_active == 0U)
     {
       /* setting 模式只关闭实时串口输出，传感器采样和历史记录仍持续运行。 */
@@ -283,6 +374,12 @@ int main(void)
     }
     RecordWritePending();
     if (g_adc_diag_active == 0U) { Serial_DumpLogs(); }
+    /* Logs and commands have priority. Diagnostic captures must stay quiet. */
+    if (g_adc_diag_active == 0U && g_record_due == 0U &&
+        g_dump_remaining == 0U)
+    {
+      SSD1306_Process(HAL_GetTick());
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -337,10 +434,22 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-/* 统一的阻塞式串口发送入口；所有输出均由主循环调用。 */
+/* 统一的阻塞式串口发送入口；所有输出均由主循环调用。
+ * UART 硬件报告发送失败时最多重发一次；奇偶校验只能由接收端检测。 */
 static void Serial_Write(const char *text)
 {
-  HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), 100U);
+  HAL_StatusTypeDef status;
+  uint16_t length = (uint16_t)strlen(text);
+  if (UartCrc_IsEnabled() && strncmp(text, "samples:", 8U) == 0)
+  {
+    (void)UartCrc_Send(text);
+    return;
+  }
+  status = HAL_UART_Transmit(&huart1, (uint8_t *)text, length, 100U);
+  if (status != HAL_OK)
+  {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, length, 100U);
+  }
 }
 
 /* TIM14 内部时钟，无外部引脚。APB 分频为 1 时 TIMCLK=PCLK，
@@ -372,10 +481,11 @@ static void RecordTimer_Init(void)
   TIM14->EGR = TIM_EGR_UG;
   TIM14->SR = 0U;
   g_record_timer_seconds = 0U;
+  g_record_timer_milliseconds = 0U;
   g_sensor_timer_milliseconds = 0U;
   g_sensor_sample_elapsed_ms = 0U;
   g_sensor_sample_request = 0U;
-  g_record_last_second = 0U;
+  g_record_last_millisecond = 0U;
   g_record_due = 0U;
   TIM14->DIER = TIM_DIER_UIE;
   HAL_NVIC_SetPriority(TIM14_IRQn, 0U, 0U);
@@ -492,7 +602,7 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
   __HAL_UART_SEND_REQ(&huart1, UART_RXDATA_FLUSH_REQUEST);
   HAL_NVIC_ClearPendingIRQ(USART1_IRQn);
   HAL_NVIC_EnableIRQ(USART1_IRQn);
-  if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U) != HAL_OK)
+  if (Serial_StartReceive() != HAL_OK)
   { status |= 4U; }
   hspi2.Init.BaudRatePrescaler = HAL_RCC_GetPCLK1Freq() == 16000000U ?
                                SPI_BAUDRATEPRESCALER_8 :
@@ -724,6 +834,7 @@ static void AdcDiag_StopPhase(void)
   {
     ms = (uint32_t)g_adc_diag_record_ms + elapsed_ms;
     g_record_timer_seconds = g_adc_diag_record_seconds + ms / 1000U;
+    g_record_timer_milliseconds = g_record_timer_seconds * 1000U + ms % 1000U;
     g_sensor_timer_milliseconds = (uint16_t)(ms % 1000U);
     TIM14->SR &= (uint32_t)~TIM_SR_UIF;
     HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
@@ -792,6 +903,124 @@ static void AdcDiag_StopPhase(void)
       for (i = 0U; i < g_adc_diag_count; i++)
       { g_adc_diag_rows[i].status |= 0x400U; }
     }
+  }
+}
+
+/* Application-only probe: reuse the existing raw single-channel driver and
+ * workspace. No reference, GPIO speed, SPI clock or conversion timing changes.
+ * Capture has no UART TX, I2C or flash access. SysTick/TIM14/RX remain enabled. */
+static uint32_t AdcProbe_NextPeriod(void)
+{
+  if (g_adc_diag_phase == 1U)
+  {
+    g_adc_probe_random = g_adc_probe_random * 1664525U + 1013904223U;
+    return 5000U + ((g_adc_probe_random >> 8) % 10001U);
+  }
+  if (g_adc_diag_phase == 2U) { return 1000U; }
+  if (g_adc_diag_phase == 3U) { return 4000U; }
+  if (g_adc_diag_phase == 4U)
+  {
+    return (g_adc_diag_count % 5U) == 0U ? 46000U : 1000U;
+  }
+  return 10000U;
+}
+
+static void AdcProbe_Finish(void)
+{
+  /* The raw capture occupied the filter RAM. Clear it before restarting IRQs;
+   * normal output/records wait for fresh 100-point windows, as at power-up. */
+  memset(&g_adc_workspace, 0, sizeof(g_adc_workspace));
+  memset((void *)g_adc_filtered_codes, 0, sizeof(g_adc_filtered_codes));
+  memset((void *)g_adc_raw_codes, 0, sizeof(g_adc_raw_codes));
+  g_ad7682.acquisition_delay_us = 100U;
+  g_ad7682.configured_channel_valid = 0U;
+  g_adc_normal_status = AD7682_ERROR;
+  g_record_due = 0U;
+  g_record_last_millisecond = g_record_timer_milliseconds;
+  g_sensor_sample_request = 0U;
+  g_sensor_sample_elapsed_ms = 0U;
+  g_adc_probe_active = 0U;
+  g_adc_diag_active = 0U;
+  Serial_Write("ADC:999,9,0,0,0,0,0,0,0,0,0,0\r\n");
+  g_adc_normal_enabled = 1U;
+  TIM3->CNT = 0U;
+  TIM3->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+  TIM3->CR1 = TIM_CR1_CEN;
+}
+
+static void AdcProbe_ProcessRequest(void)
+{
+  AdcProbePoint *point;
+  uint32_t now;
+  uint32_t period;
+  uint16_t raw = SENSOR_INVALID_ADC;
+  uint16_t i;
+  AD7682_Status status;
+  char line[128];
+
+  if (g_adc_diag_phase_ready == 0U)
+  {
+    g_ad7682.acquisition_delay_us = 100U;
+    /* Establish the selected channel before the timed capture. */
+    g_ad7682.configured_channel_valid = 0U;
+    status = AD7682_ReadChannel(&g_ad7682, g_adc_diag_channel, &raw, 10U);
+    (void)snprintf(line, sizeof(line),
+      "ADC:991,%u,%u,%u,%u,100,%u,%lu,%lu,0,0,0\r\n",
+      (unsigned)(g_adc_diag_channel * 100U + 40U + g_adc_diag_phase),
+      (unsigned)g_adc_diag_block + 1U, (unsigned)ADC_PROBE_POINTS,
+      (unsigned)g_adc_diag_phase, (unsigned)status,
+      (unsigned long)HAL_RCC_GetHCLKFreq(),
+      (unsigned long)(HAL_RCC_GetPCLK1Freq() /
+                     (2UL << ((SPI1->CR1 & SPI_CR1_BR) >> 3U))));
+    Serial_Write(line);
+    /* TX is complete before this quiet guard. Peripheral power stays unchanged. */
+    HAL_Delay(250U);
+    g_adc_diag_count = 0U;
+    g_adc_diag_phase_start_us = AD7682_TimeUs();
+    g_adc_diag_next_us = g_adc_diag_phase_start_us + 1000U;
+    g_adc_diag_phase_ready = 1U;
+  }
+  now = AD7682_TimeUs();
+  if ((int32_t)(now - g_adc_diag_next_us) < 0) { return; }
+  point = &g_adc_workspace.probe[g_adc_diag_count];
+  point->status = (uint32_t)(now - g_adc_diag_next_us) > 100U ? 256U : 0U;
+  status = AD7682_ReadChannel(&g_ad7682, g_adc_diag_channel, &raw, 10U);
+  point->status |= (uint16_t)status;
+  point->raw = status == AD7682_OK ? raw : SENSOR_INVALID_ADC;
+  point->cnv_us = (status == AD7682_OK ? g_ad7682.last_cnv_us : now) -
+                    g_adc_diag_phase_start_us;
+  g_adc_diag_count++;
+  period = AdcProbe_NextPeriod();
+  g_adc_diag_next_us += period;
+  now = AD7682_TimeUs();
+  if ((int32_t)(now - g_adc_diag_next_us) >= 0)
+  {
+    point->status |= 256U;
+    g_adc_diag_next_us = now + period;
+  }
+  if (g_adc_diag_count < ADC_PROBE_POINTS) { return; }
+
+  /* Dump only after the whole contiguous block is captured; each block has
+   * its own time origin. Never infer time across the UART dump/quiet gap. */
+  for (i = 0U; i < ADC_PROBE_POINTS; i++)
+  {
+    point = &g_adc_workspace.probe[i];
+    (void)snprintf(line, sizeof(line),
+      "ADC:%u,%lu,%u,%u,%u,%u,%u,%u,0,0,0,0\r\n",
+      (unsigned)(g_adc_diag_channel * 100U + 40U + g_adc_diag_phase),
+      (unsigned long)point->cnv_us, (unsigned)point->raw,
+      (unsigned)point->status, (unsigned)i, (unsigned)g_adc_diag_channel,
+      (unsigned)g_adc_diag_phase, (unsigned)g_adc_diag_block + 1U);
+    Serial_Write(line);
+  }
+  g_adc_diag_phase_ready = 0U;
+  g_adc_diag_block++;
+  if (g_adc_diag_block >= ADC_PROBE_BLOCKS)
+  {
+    g_adc_diag_block = 0U;
+    g_adc_diag_phase++;
+    if (g_adc_diag_phase >= ADC_PROBE_PHASES) { AdcProbe_Finish(); }
   }
 }
 
@@ -890,7 +1119,7 @@ static void AdcDiag_ProcessRequest(void)
         g_ad7682.configured_channel_valid = 0U;
         g_adc_diag_active = 0U;
         g_adc_diag_auto_channels = 0U;
-        g_record_last_second = g_record_timer_seconds;
+        g_record_last_millisecond = g_record_timer_milliseconds;
         {
           char done[96];
           (void)snprintf(done, sizeof(done), "ADC:999,%lu,0,0,0,0,0,0,0,0,0,0\r\n",
@@ -936,13 +1165,14 @@ static void Devices_Initialize(void)
 
   for (retry = 0U; retry < BOOT_INIT_RETRIES; retry++)
   {
-    g_adc_status = AD7682_Init(&g_ad7682, &hspi1, 2.5f);
+    /* AD7682 external REF is 5 V, independent of MCU VDDA (3.3 V). */
+    g_adc_status = AD7682_Init(&g_ad7682, &hspi1, AD7682_REFERENCE_VOLTS);
     if (g_adc_status == AD7682_OK) { break; }
     HAL_Delay(10U);
   }
   Serial_Write(g_adc_status == AD7682_OK ? "AD7682 INIT OK\r\n" :
                                         "AD7682 INIT ERROR\r\n");
-  Serial_Write("AD7682: 4CH 100Hz, DUMMY2+1, TEMPORAL MEDIAN100+AVG25, FILTERED LOG\r\n");
+  Serial_Write("AD7682: 4CH 100Hz, DUMMY2+1, TEMPORAL MEDIAN100+LOWPASS, FILTERED LOG\r\n");
 
   Serial_Write("SHT41 INIT...\r\n");
   status = HAL_ERROR;
@@ -1022,20 +1252,35 @@ static void Devices_Initialize(void)
   g_w25q_ready = flash_ok;
 }
 
-/* PA15/LED2 电量指示：低电平点亮，高电平熄灭。 */
+/* PA15/LED2：首次有效电压按5.5V分界识别1S/2S并锁定至复位。
+ * 5.5V位于正常1S最高4.2V与正常2S放电电压之间。
+ * 仅凭电压无法可靠识别深度过放的2S电池。
+ * 1S >=4.0V常亮、3.7~4.0V闪烁；2S阈值对应8.0/7.4V。 */
 static void BatteryLed_Update(float voltage)
 {
   static uint32_t last_toggle_tick;
   static uint8_t blink_state;
+  static uint8_t cell_count;
   uint32_t now = HAL_GetTick();
+  float high_threshold;
+  float low_threshold;
 
-  if (voltage >= 4.0f)
+  /* Wait for a plausible successful startup reading before latching. */
+  if (!(voltage >= 0.0f)) { return; }
+  if (cell_count == 0U)
+  {
+    if (voltage < 2.5f || voltage > 8.6f) { return; }
+    cell_count = voltage >= 5.5f ? 2U : 1U;
+  }
+  high_threshold = 4.0f * (float)cell_count;
+  low_threshold = 3.7f * (float)cell_count;
+  if (voltage >= high_threshold)
   {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
     blink_state = 0U;
     last_toggle_tick = now;
   }
-  else if (voltage >= 3.7f)
+  else if (voltage >= low_threshold)
   {
     if ((now - last_toggle_tick) >= 500U)
     {
@@ -1053,31 +1298,68 @@ static void BatteryLed_Update(float voltage)
   }
 }
 
+/* DMA drains RDR even while ADC masks CPU interrupts. HT/TC callbacks do
+ * not parse commands; the main loop consumes the circular buffer. */
+static HAL_StatusTypeDef Serial_StartReceive(void)
+{
+  g_uart_dma_read = 0U;
+  g_uart_dma_wraps = 0U;
+  g_uart_dma_consumed = 0U;
+  return HAL_UART_Receive_DMA(&huart1, (uint8_t *)g_uart_dma_buffer, UART_RX_DMA_SIZE);
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if (huart == &huart1)
+  if (huart == &huart1) { g_uart_dma_wraps++; }
+}
+
+static void Serial_PollReceive(void)
+{
+  uint32_t primask, wraps, remaining, produced;
+  if (g_uart_rx_restart != 0U) { return; }
+  primask = __get_PRIMASK();
+  __disable_irq();
+  wraps = g_uart_dma_wraps;
+  remaining = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);
+  /* Include a completed lap whose DMA IRQ has not run yet. DMA itself
+   * continues during this short snapshot; read CNDTR again after TC. */
+  if (__HAL_DMA_GET_FLAG(&hdma_usart1_rx, DMA_FLAG_TC1) != RESET)
   {
-    if (g_uart_rx_byte == '\r' || g_uart_rx_byte == '\n')
+    wraps++;
+    remaining = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);
+    if (remaining == 0U) { remaining = UART_RX_DMA_SIZE; }
+  }
+  __set_PRIMASK(primask);
+  produced = wraps * UART_RX_DMA_SIZE + UART_RX_DMA_SIZE - remaining;
+  if (produced - g_uart_dma_consumed > UART_RX_DMA_SIZE)
+  {
+    g_uart_overrun_errors++;
+    g_uart_rx_restart = 1U;
+    return;
+  }
+  while (g_uart_dma_consumed != produced && g_uart_line_ready == 0U)
+  {
+    uint8_t byte;
+    if (g_uart_rx_restart != 0U) { return; }
+    byte = g_uart_dma_buffer[g_uart_dma_read];
+    g_uart_dma_read = (uint16_t)((g_uart_dma_read + 1U) % UART_RX_DMA_SIZE);
+    g_uart_dma_consumed++;
+    g_uart_rx_count++;
+    if (byte == '\r' || byte == '\n')
     {
-      if (g_uart_line_ready == 0U)
+      /* Ignore an empty CR/LF, so CRLF and multiple queued lines work. */
+      if (g_uart_line_length != 0U || g_uart_line_overflow != 0U)
       {
         g_uart_line[g_uart_line_length] = 0;
         g_uart_line_ready = 1U;
+        g_uart_line_length = 0U;
       }
-      g_uart_line_length = 0U;
     }
-    else if (g_uart_line_ready == 0U)
+    else if (g_uart_line_length < sizeof(g_uart_line) - 1U)
     {
-      if (g_uart_line_length < (sizeof(g_uart_line) - 1U))
-      {
-        g_uart_line[g_uart_line_length++] = (char)g_uart_rx_byte;
-      }
-      else
-      {
-        g_uart_line_overflow = 1U;
-      }
+      g_uart_line[g_uart_line_length++] = (char)byte;
     }
-    (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
+    else { g_uart_line_overflow = 1U; }
   }
 }
 
@@ -1085,7 +1367,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
   {
-    /* 只置位标志；HAL 状态恢复放到主循环，避免在 UART ISR 内重入 HAL。 */
+    if (huart->ErrorCode & HAL_UART_ERROR_PE) { g_uart_parity_errors++; }
+    if (huart->ErrorCode & HAL_UART_ERROR_FE) { g_uart_frame_errors++; }
+    if (huart->ErrorCode & HAL_UART_ERROR_ORE) { g_uart_overrun_errors++; }
+    if (huart->ErrorCode & HAL_UART_ERROR_NE) { g_uart_noise_errors++; }
+    /* The DMA abort completion also calls here; recover only in main. */
     g_uart_rx_restart = 1U;
   }
 }
@@ -1093,6 +1379,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 static void Serial_RecoverReceive(void)
 {
   uint32_t primask;
+  static uint32_t last_report;
+  static uint8_t reported;
 
   if (g_uart_rx_restart == 0U)
   {
@@ -1111,9 +1399,20 @@ static void Serial_RecoverReceive(void)
     g_uart_line_ready = 0U;
     g_uart_line_overflow = 0U;
     g_uart_rx_restart = 0U;
-    (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_uart_rx_byte, 1U);
+    if (Serial_StartReceive() != HAL_OK) { g_uart_rx_restart = 1U; }
   }
   __set_PRIMASK(primask);
+  if (!reported || HAL_GetTick() - last_report >= 1000U)
+  {
+    char line[144];
+    reported = 1U;
+    last_report = HAL_GetTick();
+    (void)snprintf(line, sizeof(line),
+      "UART RX ERROR: parity=%lu frame=%lu overrun=%lu noise=%lu; resend command\r\n",
+      (unsigned long)g_uart_parity_errors, (unsigned long)g_uart_frame_errors,
+      (unsigned long)g_uart_overrun_errors, (unsigned long)g_uart_noise_errors);
+    Serial_Write(line);
+  }
 }
 
 static uint8_t Serial_IsSpace(char c){return (uint8_t)(c==' '||c=='\t'||c=='\r'||c=='\n');}
@@ -1121,7 +1420,6 @@ static uint8_t Serial_ToLower(char c){return (uint8_t)((c>='A'&&c<='Z')?(c+('a'-
 static uint8_t Serial_Equals(const char *a,const char *b){while(*a&&*b&&Serial_ToLower(*a)==Serial_ToLower(*b)){a++;b++;}return (uint8_t)(*a==0&&*b==0);}
 static char *Serial_Trim(char *s){char *e;while(Serial_IsSpace(*s))s++;e=s+strlen(s);while(e>s&&Serial_IsSpace(e[-1]))e--;*e=0;return s;}
 static uint8_t Serial_Digits(const char *s,uint8_t n,uint8_t *value){uint8_t i,v=0;if(!s||!value)return 0;for(i=0;i<n;i++){if(s[i]<'0'||s[i]>'9')return 0;v=(uint8_t)(v*10U+(uint8_t)(s[i]-'0'));}*value=v;return 1;}
-static uint8_t Serial_ParseUint32(const char *text,uint32_t *value){uint32_t v=0U;const char *p=text;if(!text||!value||*text==0)return 0U;while(*p){if(*p<'0'||*p>'9'||v>429496729U)return 0U;v=v*10U+(uint32_t)(*p-'0');p++;}*value=v;return 1U;}
 static uint8_t Serial_IsLeap(uint16_t year){return (uint8_t)((year%4U==0U&&year%100U!=0U)||(year%400U==0U));}
 static uint8_t Serial_DaysInMonth(uint16_t year,uint8_t month){static const uint8_t days[]={31,28,31,30,31,30,31,31,30,31,30,31};if(month==2U&&Serial_IsLeap(year))return 29U;return days[month-1U];}
 static uint8_t Serial_Weekday(uint16_t year,uint8_t month,uint8_t day){uint32_t days=0;uint16_t y;uint8_t m;for(y=2000U;y<year;y++)days+=Serial_IsLeap(y)?366U:365U;for(m=1U;m<month;m++)days+=Serial_DaysInMonth(year,m);days+=(uint32_t)(day-1U);return (uint8_t)((6U+days)%7U);}
@@ -1136,8 +1434,371 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
   dt->year=yy;dt->month=mo;dt->day=da;dt->hours=hh;dt->minutes=mi;dt->seconds=se;dt->weekday=Serial_Weekday(year,mo,da);dt->century=0U;return 1;
 }
 
+/* Seconds since 2000-01-01; the logger stores years 2000..2099. */
+static uint32_t Serial_DateTimeSeconds(const PCF8563_DateTime *dt)
+{
+  uint32_t days = 0U;
+  uint16_t year;
+  uint8_t month;
+  if (dt->century != 0U || dt->year > 99U || dt->month < 1U || dt->month > 12U ||
+      dt->day < 1U || dt->day > Serial_DaysInMonth((uint16_t)(2000U + dt->year), dt->month) ||
+      dt->hours > 23U || dt->minutes > 59U || dt->seconds > 59U)
+  {
+    return 0xFFFFFFFFUL;
+  }
+  for (year = 2000U; year < 2000U + dt->year; year++)
+  {
+    days += Serial_IsLeap(year) ? 366U : 365U;
+  }
+  for (month = 1U; month < dt->month; month++)
+  {
+    days += Serial_DaysInMonth((uint16_t)(2000U + dt->year), month);
+  }
+  days += dt->day - 1U;
+  return ((days * 24U + dt->hours) * 60U + dt->minutes) * 60U + dt->seconds;
+}
+
+static uint8_t Serial_ParseDumpTime(const char *text, size_t length, uint32_t *seconds)
+{
+  char command[22] = "SET ";
+  PCF8563_DateTime dt;
+  if (length == 19U && text[0] == '2' && text[1] == '0')
+  {
+    text += 2U;
+    length -= 2U;
+  }
+  if (length != 17U) { return 0U; }
+  memcpy(command + 4U, text, 17U);
+  if (!Serial_ParseSetTime(command, &dt)) { return 0U; }
+  *seconds = Serial_DateTimeSeconds(&dt);
+  return 1U;
+}
+
+static void Serial_PrintDumpResult(void)
+{
+  char line[80];
+  (void)snprintf(line, sizeof(line), "LOG DUMP DONE: matched=%lu read_errors=%lu\r\n",
+                 (unsigned long)g_dump_matched, (unsigned long)g_dump_read_errors);
+  if (UartCrc_IsEnabled()) { (void)UartCrc_Send(line); }
+  else { Serial_Write(line); }
+}
+
+static void Serial_StartLogDump(const char *command)
+{
+  uint32_t start = 0U, end = 0U;
+  const char *text = command + 8U;
+  uint8_t hpa = 0U, explicit_mode = 0U;
+  uint8_t filtered;
+  if (UartCrc_IsEnabled() && (UartCrc_IsBusy() || UartCrc_IsFailed() ||
+                            g_dump_remaining != 0U || g_dump_report_pending))
+  {
+    Serial_Write("LOG DUMP ERROR: link busy or failed\r\n");
+    return;
+  }
+  if (*text == ' ') { text++; }
+  if (strncmp(text, "hpa", 3U) == 0 && (text[3] == 0 || text[3] == ' '))
+  {
+    hpa = 1U; explicit_mode = 1U; text += 3U;
+    if (*text == ' ') { text++; }
+  }
+  else if (strncmp(text, "raw", 3U) == 0 && (text[3] == 0 || text[3] == ' '))
+  {
+    explicit_mode = 1U; text += 3U;
+    if (*text == ' ') { text++; }
+  }
+  filtered = (uint8_t)(*text != 0);
+  if (filtered)
+  {
+    const char *separator = strchr(text, ' ');
+    /* The first space separates date and clock; the second separates bounds. */
+    if (separator != NULL) { separator = strchr(separator + 1U, ' '); }
+    if (separator == NULL ||
+        !Serial_ParseDumpTime(text, (size_t)(separator - text), &start) ||
+        !Serial_ParseDumpTime(separator + 1U, strlen(separator + 1U), &end) ||
+        start > end)
+    {
+      Serial_Write("LOG DUMP ERROR: use log dump [raw|hpa] [YYYY-MM-DD HH:MM:SS YYYY-MM-DD HH:MM:SS] (2000..2099, start <= end)\r\n");
+      return;
+    }
+  }
+  /* Validate before replacing an active export; then take a sequence snapshot. */
+  g_dump_time_filtered = filtered;
+  g_dump_hpa = hpa;
+  g_dump_start_time = start;
+  g_dump_end_time = end;
+  g_dump_matched = 0U;
+  g_dump_read_errors = 0U;
+  g_dump_report_pending = 0U;
+  g_dump_remaining = DataLogger_Count();
+  g_dump_newest_first = DataLogger_GetDumpNewestFirst();
+  g_dump_sequence = g_dump_newest_first ? DataLogger_LastSequence() :
+                    DataLogger_LastSequence() - g_dump_remaining + 1U;
+  if (explicit_mode)
+  {
+    Serial_Write(hpa ? "LOG DUMP ADC: hPa (0.5V=350hPa, 4.5V=1350hPa, VREF=5V)\r\n" :
+                       "LOG DUMP ADC: codes (stored filtered ADC values)\r\n");
+  }
+  if (UartCrc_IsEnabled())
+  {
+    char begin[80];
+    (void)snprintf(begin, sizeof(begin), "LOG DUMP BEGIN: scanned=%lu\r\n",
+                   (unsigned long)g_dump_remaining);
+    Serial_Write(begin);
+    if (g_dump_remaining == 0U) { g_dump_report_pending = 1U; }
+  }
+  else if ((filtered || hpa) && g_dump_remaining == 0U) { Serial_PrintDumpResult(); }
+}
+
+/* Manufacturer table: 0.5V=35kPa, 4.5V=135kPa.
+ * Convert only for export, preserving stored codes and invalid-value semantics.
+ * Do not clamp: the table also lists 0V=22.5kPa and 5V=147.5kPa. */
+static float Serial_AdcPressureHpa(float code)
+{
+  if (!(code >= 0.0f && code < 65535.0f)) { return SENSOR_INVALID_FLOAT; }
+  return code * (AD7682_REFERENCE_VOLTS * 250.0f / 65536.0f) + 225.0f;
+}
+
 /* setting 模式下只处理配置和日志命令；实时采样不会被暂停。 */
-static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog start\r\nlog stop\r\nlog interval SECONDS\r\nlog order old\r\nlog order new\r\nlog dump\r\nlog clear\r\nexit\r\n");}
+static void Recording_ApplySavedConfig(void)
+{
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  g_recording_enabled = DataLogger_GetRecordingEnabled();
+  g_record_due = 0U;
+  g_record_last_millisecond = g_record_timer_milliseconds;
+  __set_PRIMASK(primask);
+}
+
+/* SW2 PB4 / SW3 PB5: schematic BUTTON1/BUTTON2, external pull-up,
+ * switch to ground. Poll in main loop, never access SPI/Flash from an ISR. */
+/* Called only by TIM14 at 1 kHz.  It does not touch the menu, display or
+ * Flash; it only debounces PB4/PB5 and latches a compact event bit. */
+void Application_KeyScan1ms(void)
+{
+  static uint8_t raw_state[2];
+  static uint8_t stable[2];
+  static uint8_t held[2];
+  static uint16_t stable_ms[2];
+  static uint16_t pressed_ms[2];
+  uint8_t key;
+  for (key = 0U; key < 2U; key++)
+  {
+    uint8_t raw = (GPIOB->IDR & (key == 0U ? GPIO_PIN_4 : GPIO_PIN_5)) == 0U;
+    if (raw != raw_state[key])
+    {
+      raw_state[key] = raw;
+      stable_ms[key] = 0U;
+    }
+    else if (stable_ms[key] < 30U) { stable_ms[key]++; }
+
+    if (stable_ms[key] >= 30U && raw != stable[key])
+    {
+      stable[key] = raw;
+      if (raw)
+      {
+        pressed_ms[key] = 0U;
+        held[key] = 0U;
+      }
+      else if (held[key] == 0U)
+      {
+        g_ui_key_events |= key == 0U ? UI_KEY_UP_SHORT : UI_KEY_DOWN_SHORT;
+      }
+    }
+    if (stable[key] != 0U && raw != 0U)
+    {
+      if (pressed_ms[key] < 800U) { pressed_ms[key]++; }
+      if (pressed_ms[key] >= 800U && held[key] == 0U)
+      {
+        held[key] = 1U;
+        g_ui_key_events |= key == 0U ? UI_KEY_UP_LONG : UI_KEY_DOWN_LONG;
+      }
+    }
+  }
+}
+
+static void Ui_Draw(void)
+{
+  char line[32];
+  SSD1306_BeginUiFrame(HAL_GetTick());
+  SSD1306_SetLine(0U,"SETTINGS");
+  (void)snprintf(line,sizeof(line),"%s BOOT %s",g_ui_selected==0U?"+":" ",g_ui_display?"ADC ONLY":"ALL SENSORS");
+  SSD1306_SetLine(1U,line);
+  (void)snprintf(line,sizeof(line),"%s RECORD %s",g_ui_selected==1U?"+":" ",g_ui_recording?"START":"STOP");
+  SSD1306_SetLine(2U,line);
+  (void)snprintf(line,sizeof(line),"%s ORDER %s",g_ui_selected==2U?"+":" ",g_ui_order?"NEW FIRST":"OLD FIRST");
+  SSD1306_SetLine(3U,line);
+  (void)snprintf(line,sizeof(line),"%s INT %.1fS%s",g_ui_selected==3U?"+":" ",(double)g_ui_interval/1000.0,g_ui_edit_interval?" EDIT":"");
+  SSD1306_SetLine(4U,line);
+  SSD1306_SetLine(5U,g_ui_selected==4U?"+ CLEAR LOGS":"  CLEAR LOGS");
+  SSD1306_SetLine(6U,g_ui_clear_confirm?"HOLD2 AGAIN TO CLEAR":g_ui_message);
+  SSD1306_SetLine(7U,"HOLD2 OK HOLD3 SAVE");
+  g_ui_dirty = 0U;
+}
+
+static void Ui_Process(void)
+{
+  uint32_t now=HAL_GetTick();
+  uint8_t events;
+  uint8_t up=0U, down=0U;
+  __disable_irq();
+  events = g_ui_key_events;
+  g_ui_key_events = 0U;
+  __enable_irq();
+  if (events == 0U) { return; }
+  if ((events & UI_KEY_UP_LONG) != 0U) { up = 2U; }
+  else if ((events & UI_KEY_UP_SHORT) != 0U) { up = 1U; }
+  if ((events & UI_KEY_DOWN_LONG) != 0U) { down = 2U; }
+  else if ((events & UI_KEY_DOWN_SHORT) != 0U) { down = 1U; }
+  /* Serial setting owns the configuration until exit; discard unsaved UI draft.
+   * Key states are still consumed, avoiding delayed actions on exit. */
+  if (g_rtc_setting_mode || g_dump_remaining)
+  { g_ui_active=0U; return; }
+  if (up && down) { return; }
+  if (!g_ui_active)
+  {
+    if (!up && !down) { return; }
+    g_ui_active=1U; g_ui_selected=0U; g_ui_edit_interval=0U;
+    g_ui_clear_confirm=0U;
+    g_ui_display=DataLogger_GetDisplayAdcOnly();
+    g_ui_recording=DataLogger_GetRecordingEnabled();
+    g_ui_order=DataLogger_GetDumpNewestFirst();
+    g_ui_interval=DataLogger_GetIntervalMs();
+    g_ui_message="UP2 DOWN3"; g_ui_dirty=1U;
+  }
+  else if (down==2U)
+  {
+    uint8_t timer_changed = (uint8_t)(g_ui_recording != DataLogger_GetRecordingEnabled() ||
+                                     g_ui_interval != DataLogger_GetIntervalMs());
+    /* One shared configuration record, not one write for every button press. */
+    if (DataLogger_SetMenuConfig(g_ui_display,g_ui_recording,g_ui_order,g_ui_interval)==HAL_OK)
+    {
+      if (timer_changed) { Recording_ApplySavedConfig(); }
+      g_ui_active=0U;
+      SSD1306_BeginUiFrame(now);
+      SSD1306_SetLine(0U,"SETTINGS SAVED");
+      return;
+    }
+    g_ui_message="SAVE ERROR RETRY"; g_ui_dirty=1U;
+  }
+  else if (up==1U || down==1U)
+  {
+    g_ui_clear_confirm=0U; g_ui_message="UP2 DOWN3";
+    if (g_ui_edit_interval)
+    {
+      if (up==1U)
+      {
+        if (g_ui_interval > 500UL) { g_ui_interval -= 500UL; }
+      }
+      else
+      {
+        if (g_ui_interval < 86400000UL) { g_ui_interval += 500UL; }
+      }
+    }
+    else { g_ui_selected=(uint8_t)((g_ui_selected+(up==1U?4U:1U))%5U); }
+    g_ui_dirty=1U;
+  }
+  else if (up==2U)
+  {
+    switch (g_ui_selected)
+    {
+      case 0U:g_ui_display^=1U;break;
+      case 1U:g_ui_recording^=1U;break;
+      case 2U:g_ui_order^=1U;break;
+      case 3U:g_ui_edit_interval^=1U;break;
+      case 4U:
+        if (!g_ui_clear_confirm) { g_ui_clear_confirm=1U; }
+        else
+        {
+          /* Same clear API as serial; calibration and menu settings survive. */
+          g_ui_message=DataLogger_Clear(3000U)==HAL_OK?"LOGS CLEARED":"CLEAR ERROR RETRY";
+          g_ui_clear_confirm=0U;
+        }
+        break;
+      default:break;
+    }
+    g_ui_dirty=1U;
+  }
+  if (g_ui_dirty) { Ui_Draw(); }
+}
+
+static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog start\r\nlog stop\r\nlog interval SECONDS (0.5 step)\r\nlog order old\r\nlog order new\r\nlog dump [raw|hpa]\r\nlog dump [raw|hpa] YYYY-MM-DD HH:MM:SS YYYY-MM-DD HH:MM:SS\r\nlog clear\r\ndisplay all\r\ndisplay adc\r\nbattery info\r\nbattery cal VOLTS (example: battery cal 8.120)\r\nbattery reset\r\nadcprobe 0..3\r\nexit\r\n");}
+
+static void Serial_BatteryCommand(const char *command)
+{
+  char line[160];
+  float actual = 0.0f, place = 0.1f, gain;
+  uint8_t decimal = 0U, digits = 0U, fraction = 0U;
+  const char *p;
+  if (Serial_Equals(command, "battery info"))
+  {
+    (void)snprintf(line,sizeof(line),
+      "BATTERY: MCU VREF=3.300V Rtop=100k Rbottom=47k gain=%.6f voltage=%.3fV fresh=%u\r\n",
+      (double)DataLogger_GetBatteryGain(),
+      (double)(g_battery_valid ? g_battery_nominal * DataLogger_GetBatteryGain() : SENSOR_INVALID_FLOAT),
+      (unsigned)(g_battery_valid && (HAL_GetTick()-g_battery_valid_tick)<=2000U));
+    Serial_Write(line); return;
+  }
+  if (Serial_Equals(command,"battery reset")) { gain = 1.0f; }
+  else if (strncmp(command,"battery cal ",12U)==0)
+  {
+    for (p=command+12U; *p; p++)
+    {
+      if (*p=='.' && !decimal) { decimal=1U; continue; }
+      if (*p<'0' || *p>'9' || digits>=6U || (decimal && fraction>=3U)) { break; }
+      digits++;
+      if (decimal) { actual += (float)(*p-'0')*place; place*=0.1f; fraction++; }
+      else { actual=actual*10.0f+(float)(*p-'0'); }
+    }
+    if (*p || !digits || (decimal && !fraction) || !(actual>=2.5f && actual<=8.6f))
+    { Serial_Write("BATTERY CAL ERROR: use battery cal 2.500..8.600 (actual battery volts)\r\n"); return; }
+    if (!g_battery_valid || HAL_GetTick()-g_battery_valid_tick>2000U || g_battery_nominal<=0.0f)
+    { Serial_Write("BATTERY CAL ERROR: no fresh ADC reading\r\n"); return; }
+    /* Always refer to uncalibrated filtered voltage; repeat calibration does not compound gain. */
+    gain=actual/g_battery_nominal;
+    if (!(gain>=0.5f && gain<=1.5f))
+    { Serial_Write("BATTERY CAL ERROR: gain outside 0.5..1.5; check divider/reference\r\n"); return; }
+  }
+  else { Serial_Write("Use battery info / battery cal VOLTS / battery reset\r\n"); return; }
+  if (DataLogger_SetBatteryGain(gain)!=HAL_OK)
+  { Serial_Write("BATTERY CAL SAVE ERROR\r\n"); return; }
+  if (g_battery_valid)
+  {
+    g_pending_record.battery_voltage=g_battery_nominal*DataLogger_GetBatteryGain();
+    BatteryLed_Update(g_pending_record.battery_voltage);
+  }
+  (void)snprintf(line,sizeof(line),"BATTERY CAL SAVED: gain=%.6f voltage=%.3fV (MCU FLASH)\r\n",
+    (double)DataLogger_GetBatteryGain(),
+    (double)(g_battery_valid ? g_pending_record.battery_voltage : SENSOR_INVALID_FLOAT));
+  Serial_Write(line);
+}
+/* Parse seconds exactly at half-second resolution, without scanf/float rounding. */
+static uint8_t Serial_ParseIntervalMs(const char *text, uint32_t *result)
+{
+  uint32_t seconds=0U;
+  uint16_t fraction=0U;
+  uint16_t scale=100U;
+  uint8_t digits=0U;
+  const char *p=text;
+  while (*p>='0' && *p<='9')
+  {
+    if (seconds>86400UL) { return 0U; }
+    seconds=seconds*10UL+(uint32_t)(*p++-'0'); digits++;
+  }
+  if (!digits || seconds>86400UL) { return 0U; }
+  if (*p=='.')
+  {
+    p++; digits=0U;
+    while (*p>='0' && *p<='9')
+    {
+      if (digits>=3U) { return 0U; }
+      fraction+=(uint16_t)(*p++-'0')*scale;scale/=10U;digits++;
+    }
+    if (!digits) { return 0U; }
+  }
+  *result=seconds*1000UL+fraction;
+  return (uint8_t)(*p==0 && *result>=500UL && *result<=86400000UL && *result%500UL==0U);
+}
+
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
@@ -1152,11 +1813,9 @@ static void Serial_HandleSetTime(const char *command)
 static void Serial_ProcessCommand(void)
 {
   char command[64];char line[64];char *trimmed;uint8_t overflow;
-  if(!g_uart_line_ready)
-  {
-    Serial_RecoverReceive();
-    if(!g_uart_line_ready)return;
-  }
+  Serial_RecoverReceive();
+  Serial_PollReceive();
+  if (!g_uart_line_ready || g_uart_rx_restart != 0U) { return; }
   __disable_irq();
   memcpy(command,g_uart_line,sizeof(command));
   overflow=g_uart_line_overflow;
@@ -1166,8 +1825,67 @@ static void Serial_ProcessCommand(void)
   g_uart_line_overflow=0U;
   if(overflow){Serial_Write("Command error: line too long\r\n");return;}
   trimmed=Serial_Trim(command);if(*trimmed==0)return;
+  if (UartCrc_HandleControl(trimmed)) { return; }
+  if (strncmp(trimmed, "link crc on ", 12U) == 0)
+  {
+    uint32_t session;
+    if (!UartCrc_ParseHex8(trimmed + 12U, &session))
+    { Serial_Write("LINK CRC ERROR: use link crc on SESSION8HEX\r\n"); return; }
+    g_dump_remaining = 0U; g_dump_report_pending = 0U;
+    UartCrc_Enable(session);
+    (void)snprintf(line, sizeof(line), "LINK CRC ON %08lX\r\n", (unsigned long)session);
+    Serial_Write(line);
+    return;
+  }
+  if (Serial_Equals(trimmed, "link crc off"))
+  {
+    g_dump_remaining = 0U; g_dump_report_pending = 0U;
+    UartCrc_Disable();
+    Serial_Write("LINK CRC OFF\r\n"); return;
+  }
+  if (Serial_Equals(trimmed, "uart info"))
+  {
+    char info[160];
+    (void)snprintf(info, sizeof(info),
+      "UART RX DMA128 921600 8E1: bytes=%lu parity=%lu frame=%lu overrun=%lu noise=%lu\r\n",
+      (unsigned long)g_uart_rx_count, (unsigned long)g_uart_parity_errors,
+      (unsigned long)g_uart_frame_errors, (unsigned long)g_uart_overrun_errors,
+      (unsigned long)g_uart_noise_errors);
+    Serial_Write(info);
+    return;
+  }
+  if(strncmp(trimmed,"adcprobe ",9U)==0)
+  {
+    if (UartCrc_IsEnabled()) { Serial_Write("ADC PROBE ERROR: disable CRC link first\r\n"); return; }
+    if(trimmed[9]<'0'||trimmed[9]>'3'||trimmed[10]!=0||
+       g_adc_diag_active!=0U||g_dump_remaining!=0U)
+    {
+      Serial_Write("ADC PROBE ERROR: use adcprobe 0..3 without log dump\r\n");
+      return;
+    }
+    /* Stop the normal ISR before reusing its filter storage. */
+    TIM3->CR1 = 0U;
+    g_adc_normal_enabled = 0U;
+    TIM3->SR = 0U;
+    HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+    g_adc_diag_channel = (uint8_t)(trimmed[9]-'0');
+    g_adc_diag_phase = 0U;
+    g_adc_diag_block = 0U;
+    g_adc_diag_count = 0U;
+    g_adc_diag_phase_ready = 0U;
+    g_adc_probe_random = 0x76820001UL;
+    g_record_due = 0U;
+    g_adc_probe_active = 1U;
+    g_adc_diag_active = 1U;
+    (void)snprintf(line, sizeof(line),
+      "ADC:990,9,6,288,3,%u,100,2000000,0,0,0,0\r\n",
+      (unsigned)g_adc_diag_channel);
+    Serial_Write(line);
+    return;
+  }
   if(strncmp(trimmed,"adcdiag ",8U)==0)
   {
+    if (UartCrc_IsEnabled()) { Serial_Write("ADC DIAG ERROR: disable CRC link first\r\n"); return; }
     if(trimmed[8]<'0'||trimmed[8]>'3'||trimmed[9]!=0||
        g_adc_diag_active!=0U||g_dump_remaining!=0U||g_rtc_setting_mode!=0U)
     {
@@ -1192,57 +1910,60 @@ static void Serial_ProcessCommand(void)
     return;
   }
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
-  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
+  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;g_dump_report_pending=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
   {
-    if(Serial_Equals(trimmed,"log start") || Serial_Equals(trimmed,"log stop"))
+    if(strncmp(trimmed,"battery ",8U)==0)
+    {
+      Serial_BatteryCommand(trimmed);
+    }
+    else if(Serial_Equals(trimmed,"display all") || Serial_Equals(trimmed,"display adc"))
+    {
+      Serial_Write(DataLogger_SetMenuConfig(Serial_Equals(trimmed,"display adc"),
+        DataLogger_GetRecordingEnabled(),DataLogger_GetDumpNewestFirst(),
+        DataLogger_GetIntervalMs())==HAL_OK ? "DISPLAY SAVED\r\n" : "DISPLAY SAVE ERROR\r\n");
+    }
+    else if(Serial_Equals(trimmed,"log start") || Serial_Equals(trimmed,"log stop"))
     {
       uint8_t enabled = Serial_Equals(trimmed,"log start") ? 1U : 0U;
       if(DataLogger_SetRecordingEnabled(enabled)==HAL_OK)
       {
-        uint32_t primask = __get_PRIMASK();
-        __disable_irq();
         if(g_recording_enabled != enabled)
         {
-          g_recording_enabled = enabled;
-          g_record_due = 0U;
-          g_record_last_second = g_record_timer_seconds;
+          Recording_ApplySavedConfig();
         }
-        __set_PRIMASK(primask);
         Serial_Write(enabled ? "LOG RECORDING ON\r\n" : "LOG RECORDING OFF\r\n");
       }
       else { Serial_Write("LOG RECORDING CONFIG ERROR\r\n"); }
     }
-    else if(Serial_Equals(trimmed,"log dump"))
+    else if(Serial_Equals(trimmed,"log dump") || strncmp(trimmed,"log dump ",9U)==0)
     {
-      g_dump_remaining = DataLogger_Count();
-      g_dump_newest_first = DataLogger_GetDumpNewestFirst();
-      g_dump_sequence = g_dump_newest_first ? DataLogger_LastSequence() :
-                        DataLogger_LastSequence() - g_dump_remaining + 1U;
+      Serial_StartLogDump(trimmed);
     }
     else if(Serial_Equals(trimmed,"log info"))
     {
       char line[128];
-      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu interval=%lus order=%s recording=%s\r\n",
+      (void)snprintf(line,sizeof(line),"LOG INFO: count=%lu capacity=%lu interval=%.1fs order=%s recording=%s display=%s\r\n",
                      (unsigned long)DataLogger_Count(),
                      (unsigned long)DataLogger_Capacity(),
-                     (unsigned long)DataLogger_GetInterval(),
+                     (double)DataLogger_GetIntervalMs()/1000.0,
                      DataLogger_GetDumpNewestFirst() ? "newest-first" : "oldest-first",
-                     g_recording_enabled ? "on" : "off");
+                     g_recording_enabled ? "on" : "off",
+                     DataLogger_GetDisplayAdcOnly() ? "adc" : "all");
       Serial_Write(line);
     }
     else if(strncmp(trimmed,"log interval ",13U)==0)
     {
-      uint32_t seconds;
-      if(Serial_ParseUint32(&trimmed[13],&seconds) &&
-         DataLogger_SetInterval(seconds,3000U)==HAL_OK)
+      uint32_t milliseconds;
+      if(Serial_ParseIntervalMs(&trimmed[13],&milliseconds) &&
+         DataLogger_SetIntervalMs(milliseconds,3000U)==HAL_OK)
       {
-        g_record_last_second = g_record_timer_seconds;
+        Recording_ApplySavedConfig();
         Serial_Write("LOG INTERVAL OK\r\n");
       }
       else
       {
-        Serial_Write("LOG INTERVAL ERROR: use log interval 1..86400\r\n");
+        Serial_Write("LOG INTERVAL ERROR: use log interval 0.5..86400 step 0.5 seconds\r\n");
       }
     }
     else if(Serial_Equals(trimmed,"log order old") || Serial_Equals(trimmed,"log order oldest"))
@@ -1258,6 +1979,7 @@ static void Serial_ProcessCommand(void)
     else if(Serial_Equals(trimmed,"log clear"))
     {
       g_dump_remaining = 0U;
+      g_dump_report_pending = 0U;
       Serial_Write(DataLogger_Clear(3000U)==HAL_OK ?
                   "LOG CLEAR OK\r\n" : "LOG CLEAR ERROR\r\n");
     }
@@ -1279,6 +2001,17 @@ static void Serial_DumpLogs(void)
   uint16_t year;
   char line[180];
   DataLogger_Sample sample;
+  uint8_t include;
+  if (UartCrc_IsEnabled())
+  {
+    if (UartCrc_IsBusy() || UartCrc_IsFailed()) { return; }
+    if (g_dump_report_pending)
+    {
+      g_dump_report_pending = 0U;
+      Serial_PrintDumpResult();
+      return;
+    }
+  }
 
   /* 每次主循环只发送一条，不阻塞采样、记录和命令处理。
      固定序号快照：导出期间新增记录不混入本次导出。 */
@@ -1289,20 +2022,53 @@ static void Serial_DumpLogs(void)
     g_dump_remaining--;
     if (DataLogger_ReadSequence(sequence, &sample, 100U) != HAL_OK)
     {
-      return;
+      g_dump_read_errors++;
     }
-    year = (uint16_t)(sample.datetime.year +
-                      ((sample.datetime.century != 0U) ? 1900U : 2000U));
-    (void)snprintf(line, sizeof(line),
-                   "samples: %u,%02u,%02u,%02u,%02u,%02u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\r\n",
+    else
+    {
+      include = 1U;
+      if (g_dump_time_filtered)
+      {
+        uint32_t seconds = Serial_DateTimeSeconds(&sample.datetime);
+        include = (uint8_t)(seconds >= g_dump_start_time && seconds <= g_dump_end_time);
+      }
+      if (include)
+      {
+        if (g_dump_hpa)
+        {
+          uint8_t channel;
+          for (channel = 0U; channel < 4U; channel++)
+          {
+            sample.adc[channel] = Serial_AdcPressureHpa(sample.adc[channel]);
+          }
+        }
+        year = (uint16_t)(sample.datetime.year +
+                         ((sample.datetime.century != 0U) ? 1900U : 2000U));
+        (void)snprintf(line, sizeof(line),
+                   "samples: %u,%02u,%02u,%02u,%02u,%02u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\r\n",
                    (unsigned)year, (unsigned)sample.datetime.month,
                    (unsigned)sample.datetime.day, (unsigned)sample.datetime.hours,
                    (unsigned)sample.datetime.minutes, (unsigned)sample.datetime.seconds,
                    (double)sample.temperature_c, (double)sample.humidity_rh,
                    (double)sample.pressure_u7_hpa, (double)sample.pressure_u11_hpa,
                    (double)sample.adc[0], (double)sample.adc[1],
-                   (double)sample.adc[2], (double)sample.adc[3]);
-    Serial_Write(line);
+                   (double)sample.adc[2], (double)sample.adc[3],
+                   (double)sample.battery_voltage);
+        Serial_Write(line);
+        g_dump_matched++;
+      }
+    }
+    if (g_dump_remaining == 0U)
+    {
+      if (UartCrc_IsEnabled()) { g_dump_report_pending = 1U; }
+      else if (g_dump_time_filtered || g_dump_hpa) { Serial_PrintDumpResult(); }
+    }
+    else if (UartCrc_IsEnabled() && (g_dump_remaining % 128U) == 0U)
+    {
+      (void)snprintf(line, sizeof(line), "LOG DUMP PROGRESS: remaining=%lu\r\n",
+                     (unsigned long)g_dump_remaining);
+      Serial_Write(line);
+    }
   }
 }
 
@@ -1314,6 +2080,52 @@ static float Median3(float a, float b, float c)
   if (b > c) { swap = b; b = c; c = swap; }
   if (a > b) { swap = a; a = b; b = swap; }
   return b;
+}
+
+/* 三点中值去除孤立尖峰，再做50点滑动平均；只在有效转换时推进。
+ * 初次使用实际读数建窗，不填零；读取失败保留上次结果，
+ * 超过5秒无有效转换后，下一次成功读取重新建立窗口。 */
+static float BatteryFilter_Update(HAL_StatusTypeDef status, uint32_t raw)
+{
+  static float recent[3];
+  static float means[BATTERY_AVG_WINDOW];
+  static float sum;
+  static float filtered = SENSOR_INVALID_FLOAT;
+  static uint32_t last_tick;
+  static uint8_t valid;
+  static uint8_t recent_index;
+  static uint8_t mean_index;
+  static uint8_t count;
+  uint32_t now = HAL_GetTick();
+  float voltage;
+  float median;
+  uint8_t i;
+  if (status != HAL_OK || raw > 4095U)
+  { return valid ? filtered * DataLogger_GetBatteryGain() : SENSOR_INVALID_FLOAT; }
+  voltage = BatteryAdc_CalibratedVoltage(raw);
+  if (!valid || (now - last_tick) > 5000U)
+  {
+    for (i = 0U; i < 3U; i++) { recent[i] = voltage; }
+    recent_index = 0U;
+    mean_index = 0U;
+    count = 0U;
+    sum = 0.0f;
+    valid = 1U;
+  }
+  recent[recent_index] = voltage;
+  recent_index = (uint8_t)((recent_index + 1U) % 3U);
+  median = Median3(recent[0], recent[1], recent[2]);
+  if (count == BATTERY_AVG_WINDOW) { sum -= means[mean_index]; }
+  else { count++; }
+  means[mean_index] = median;
+  sum += median;
+  mean_index = (uint8_t)((mean_index + 1U) % BATTERY_AVG_WINDOW);
+  filtered = sum / (float)count;
+  last_tick = now;
+  g_battery_nominal = filtered;
+  g_battery_valid_tick = now;
+  g_battery_valid = 1U;
+  return filtered * DataLogger_GetBatteryGain();
 }
 
 /* 三点中值后接50点滑动平均，温湿度独立运算并保留小数。
@@ -1378,9 +2190,9 @@ static uint8_t Pressure_IsValid(float pressure_hpa)
   return (uint8_t)(pressure_hpa > 0.0f && pressure_hpa < 2000.0f);
 }
 
-/* Across-time median rejects up to 49 contaminated points per 100 scans.
- * Mean25 smooths only median outputs, never raw conversions. No invalid-code
- * substitution is used for spikes; persistent real steps remain trackable. */
+/* 100-point temporal median followed by two cascaded first-order lowpasses.
+ * Each pole has tau=0.2 s at 100 Hz. Short outliers remain median-rejected;
+ * sustained steps remain trackable, with smoothing delay (not hard clipping). */
 static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
 {
   uint16_t temp;
@@ -1417,41 +2229,46 @@ static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
     median_twice = (uint32_t)filter->sorted[count / 2U] +
                      filter->sorted[count / 2U - 1U];
   }
-  /* Start the smoothing mean only after one complete second of samples. */
+  /* Warm up with actual medians, never zero-fill the lowpass stages. */
   if (count < ADC_FILTER_WINDOW)
   {
     return (float)median_twice * 0.5f;
   }
-  if (filter->mean_count == 25U)
+  if (filter->lowpass_ready == 0U)
   {
-    filter->mean_sum -= filter->mean_values[filter->mean_next];
+    filter->lowpass1 = (float)median_twice * 0.5f;
+    filter->lowpass2 = filter->lowpass1;
+    filter->lowpass_ready = 1U;
   }
-  else { filter->mean_count++; }
-  filter->mean_values[filter->mean_next] = median_twice;
-  filter->mean_sum += median_twice;
-  filter->mean_next = (uint8_t)((filter->mean_next + 1U) % 25U);
-  return (float)filter->mean_sum / (2.0f * (float)filter->mean_count);
+  else
+  {
+    filter->lowpass1 += ADC_LOWPASS_ALPHA *
+                         ((float)median_twice * 0.5f - filter->lowpass1);
+    filter->lowpass2 += ADC_LOWPASS_ALPHA *
+                         (filter->lowpass1 - filter->lowpass2);
+  }
+  return filter->lowpass2;
 }
 
 /* Snapshot filtered ADC codes at the configured deadline; RTC and flash I/O
  * remain in the main loop so they cannot stretch the 100 Hz timer period. */
 static void RecordCaptureDue(void)
 {
-  uint32_t now = g_record_timer_seconds;
-  uint32_t interval = DataLogger_GetInterval();
+  uint32_t now = g_record_timer_milliseconds;
+  uint32_t interval = DataLogger_GetIntervalMs();
   uint32_t elapsed;
   uint8_t channel;
   uint32_t primask;
   if (g_recording_enabled == 0U || interval == 0U ||
-      (now - g_record_last_second) < interval) { return; }
+      (now - g_record_last_millisecond) < interval) { return; }
   /* Never create initial records from zero-initialized buffers. After the
    * first real window, SPI failures retain the last measured filtered code. */
   for (channel = 0U; channel < 4U; channel++)
   {
     if (g_adc_temporal_filters[channel].count < ADC_FILTER_WINDOW) { return; }
   }
-  elapsed = now - g_record_last_second;
-  g_record_last_second += (elapsed / interval) * interval;
+  elapsed = now - g_record_last_millisecond;
+  g_record_last_millisecond += (elapsed / interval) * interval;
   primask = __get_PRIMASK();
   __disable_irq();
   for (channel = 0U; channel < 4U; channel++)
@@ -1492,6 +2309,7 @@ static void RecordWritePending(void)
                          SENSOR_INVALID_FLOAT;
   sample.humidity_rh = sht_fresh ? g_sht_filtered_humidity :
                        SENSOR_INVALID_FLOAT;
+  sample.battery_voltage = g_pending_record.battery_voltage;
   sample.pressure_u7_hpa = g_u7_pressure_average.count != 0U ?
       g_u7_pressure_average.sum / (float)g_u7_pressure_average.count : SENSOR_INVALID_FLOAT;
   sample.pressure_u11_hpa = g_u11_pressure_average.count != 0U ?
@@ -1580,7 +2398,8 @@ static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
 /* 读取一轮所有传感器，按记录周期写 Flash，并按实时格式输出。 */
 static void Samples_ProcessAndOutput(void)
 {
-  uint32_t battery_raw;
+  uint32_t battery_raw = 0U;
+  HAL_StatusTypeDef battery_status;
   float adc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   uint16_t adc_raw[4] = {0U, 0U, 0U, 0U};
   float battery_voltage;
@@ -1601,9 +2420,10 @@ static void Samples_ProcessAndOutput(void)
      会拖慢记录周期的 SPI 采样。 */
   (void)Application_AdcGetSnapshot(adc, adc_raw);
 
-  battery_raw = BatteryAdc_ReadRaw(&hadc1, 10U);
-  battery_voltage = BatteryAdc_CalibratedVoltage(battery_raw);
-  BatteryLed_Update(battery_voltage);
+  battery_status = BatteryAdc_ReadRawChecked(&hadc1, &battery_raw, 10U);
+  battery_voltage = BatteryFilter_Update(battery_status, battery_raw);
+  g_pending_record.battery_voltage = battery_voltage;
+  if (battery_voltage >= 0.0f) { BatteryLed_Update(battery_voltage); }
   /* 即使上电初始化失败，也继续尝试读取；器件可能在上电后稍晚恢复。 */
   sht_status = SHT41_Read(&hi2c1, &sht_temperature, &sht_humidity, 100U);
   ShtFilter_Update(sht_status, sht_temperature, sht_humidity);
@@ -1643,13 +2463,68 @@ static void Samples_ProcessAndOutput(void)
   RecordWritePending();
   /* Do not print power-up zeros or partially warmed filters as measurements. */
   if (Application_AdcGetSnapshot(adc, adc_raw) == 0U) { return; }
+  if (!g_ui_active && SSD1306_BeginFrame(HAL_GetTick()))
+  {
+    static uint32_t rtc_tick;
+    static uint8_t rtc_valid;
+    static uint8_t rtc_attempted;
+    static PCF8563_DateTime display_time;
+    uint32_t now = HAL_GetTick();
+    if (DataLogger_GetDisplayAdcOnly())
+    {
+    SSD1306_SetDashboard();
+    /* Read RTC at most once per second. Never freeze an old time on failure. */
+    if (!rtc_attempted || now-rtc_tick >= 1000U)
+    {
+      rtc_attempted=1U;
+      rtc_tick=now;
+      rtc_valid=PCF8563_ReadDateTime(&hi2c1,&display_time,10U)==HAL_OK ? 1U : 0U;
+    }
+    if (rtc_valid)
+    {
+      (void)snprintf(adc_text,sizeof(adc_text),"%02u:%02u:%02u",
+        (unsigned)display_time.hours,(unsigned)display_time.minutes,(unsigned)display_time.seconds);
+    }
+    else { (void)snprintf(adc_text,sizeof(adc_text),"RTC READ ERROR"); }
+    SSD1306_SetLine(0U,adc_text);
+    (void)snprintf(adc_text,sizeof(adc_text),"P1:%.2f",(double)u7_pressure_average);
+    SSD1306_SetLine(1U,adc_text);
+    (void)snprintf(adc_text,sizeof(adc_text),"P2:%.2f",(double)u11_pressure_average);
+    SSD1306_SetLine(2U,adc_text);
+    (void)snprintf(adc_text,sizeof(adc_text),"0:%.2f",(double)adc[0]);
+    SSD1306_SetLine(3U,adc_text);
+    (void)snprintf(adc_text,sizeof(adc_text),"2:%.2f",(double)adc[2]);
+    SSD1306_SetLine(4U,adc_text);
+    }
+    else
+    {
+      uint8_t channel;
+      SSD1306_SetLargeText(0U);
+      (void)snprintf(adc_text,sizeof(adc_text),"BAT %.3fV LOG %s",
+        (double)battery_voltage,g_recording_enabled?"ON":"OFF");
+      SSD1306_SetLine(0U,adc_text);
+      (void)snprintf(adc_text,sizeof(adc_text),"T %.2fC H %.2f%%",
+        (double)sht_temperature,(double)sht_humidity);
+      SSD1306_SetLine(1U,adc_text);
+      (void)snprintf(adc_text,sizeof(adc_text),"P1 %.2f HPA",(double)u7_pressure_average);
+      SSD1306_SetLine(2U,adc_text);
+      (void)snprintf(adc_text,sizeof(adc_text),"P2 %.2f HPA",(double)u11_pressure_average);
+      SSD1306_SetLine(3U,adc_text);
+      for(channel=0U;channel<4U;channel++)
+      {
+        (void)snprintf(adc_text,sizeof(adc_text),"IN%u %.2f",(unsigned)channel,(double)adc[channel]);
+        SSD1306_SetLine((uint8_t)(4U+channel),adc_text);
+      }
+    }
+  }
   (void)snprintf(adc_text, sizeof(adc_text),
                  "%.2f,%.2f,%.2f,%.2f", (double)adc[0], (double)adc[1],
                  (double)adc[2], (double)adc[3]);
 
   /* 采样或 Flash 写入期间到达的命令，在下一行实时输出前处理。 */
   Serial_ProcessCommand();
-  if (g_rtc_setting_mode != 0U || g_adc_diag_active != 0U)
+  if (g_rtc_setting_mode != 0U || g_adc_diag_active != 0U ||
+      (UartCrc_IsEnabled() && (UartCrc_IsBusy() || UartCrc_IsFailed())))
   {
     return;
   }

@@ -1,0 +1,2796 @@
+ADIဃǈ ADI੊ ADIࠃ
+ă
+ 
+AD7682/AD7689
+ 
+ 
+Rev. B 
+Information furnished by Analog Devices is believed to be accurate and reliable. However, no 
+responsibility is assumed by Analog Devices for its use, nor for any infringements of patents or other 
+rights of third parties that may result from its use. Specifications subject to change without notice. No 
+license is granted by implication or otherwise under any patent or patent rights of Analog Devices. 
+Trademarks and registered trademarks are the property of their respective owners. 
+  
+ 
+One Technology Way, P.O. Box 9106, Norwood, MA 02062-9106, U.S.A.
+Tel: 781.329.4700 www.analog.com 
+Fax: 781.461.3113 ©2008–20 09 Analog Devices, Inc. All rights reserved. 
+ీ઀཮
+AD7689
+REF
+GND
+VDD
+VIO
+DIN
+SCK
+SDO
+CNV
+1.8V
+TO
+VDD
+2.3V TO 5.5V
+SEQUENCER
+SPI SERIAL
+INTERFACE
+MUX 16-BIT SAR
+ADC
+BAND GAP
+REF
+TEMP
+SENSOR
+REFIN
+IN0
+IN1
+IN4
+IN5
+IN6
+IN7
+IN3
+IN2
+COM
+0.5V TO VDD
+10μF
+ONE-POLE
+LPF
+0.5V TO VDD – 0.5V
+0.1μF
+07353-001 
+՗1. ڢ14/16࿋PulSAR® ADC 
+ૌ႙ ຕ  250 kSPS  500  kSPS ADCഗ
+14-Bit 8    AD7949  ADA4841-x
+16-Bit 4 AD7682  ADA4841-x  
+16-Bit 8 AD7689    AD7699 ADA4841-x
+ 
+16࿋Ă4/8ڢ
+250 kPSP PulSAR ADC
+༬Ⴀ 
+16Ր୲Ă࿮฿ஓ 
+4ڢAD7682)/8ڢAD7689)ᆩഗ
+! ੗჋ስ๼෇
+๼෇  
+*ں  
+࿁ມटႠ๼෇  
+ཾུ໏୲ǖ250 kSPS 
+INL႙ኵ±0.4 LSBኵ±1.5 LSB)±23 ppmईFSR*
+ྷǖ93.8 dB 
+SINADǖ92.5 dB (20 kHz) 
+THDǖ−100 dB(20 kHz)
+ྷǖ0 V዁VREFǈVREFٳVDD 
+ዖएጚᇸૌ႙ 
+ڦ2.5 Vई4.096 Vएጚᇸ 
+ٳ4.096 V* 
+ٳVDD* 
+ഗ(TEMP) 
+ڦ1஬ኸ๖ഗ 
+ǈSARࠓ 
+ፕǖ2.3 V዁5.5 Vუǖ1.8 V዁5.5 V 
+ႜথ੨ǈग़ඹSPIĂMICROWIREĂQSPIࢅDSP 
+ࡼࠀ
+3.5 mW(2.5 V/200 kSPS)
+ 12.5 mW(5 V/250 kSPS)
+ୁǖ50 nA 
+೗ 
+20ᆅগ4 mm × 4 mm LFCSPጎ 
+ᆌᆩ 
+ဣཥ॔੦ 
+ยԢ 
+ᅅଐᅏഗǖECG/EKG 
+ཚ႑ǖGPS 
+૰၍॔੦ 
+ण 
+णဣཥ 
+ᅏഗᅏ՗ 
+੦዆ 
+ຎ!
+AD7682/AD7689๟4/8Ă16԰ৎस
+ഗ(SAR)ഗ(ADC)ᇸVDDă 
+AD7682/AD7689ڦ
+ኈ16࿋SAR ADC Ǘᆩᇀॽ
+๼෇ई
+ڦ4ڢAD7682)ई8ڢAD7689)ୟ
+೏ᅎएጚᇸ)੗ᅜ჋ስ 2.5 V ई4.096 V࣐ࢅ
+ཚ
+Ⴞଚഗă 
+AD7682/AD7689ڦڇSPIႀ
+থ๭ă SPIᇸ (VIO)ǈ໲
+ኟԲă 
+AD7682/AD7689ᆩၭ႙20ᆅগLFCSPݔ܈
+ྷྺ−40°C዁+85°Că 
+཮2/!
+
+ 
+Rev. B | Page 2 of 32 
+ణ୤!
+ 
+૦๏!
+2009౎6ሆ—ӲAӲB 
+2009౎3ሆ—Ӳ0ӲA 
+ 
+2008౎5ሆ—Ӳ0๔Ӳ 
+ 
+߀߸“༬Ⴀ”Ă“ᆌᆩ”཮1 .......................................... 1 
+ሺे՗2ǗዘႎಇႾ ...................................................................... 3 
+VREFྺVREF ............................................................................. 4 
+՗3 ............................................................................................ 5 
+՗4  ........................................................................................... 6 
+՗5 ............................................................................................ 7 
+՗6࿂ጀ2 ............................................................................. 8 
+཮4Ă཮5՗7 ....................................................................... 9 
+཮6Ă཮9཮10 ................................................................... 11 
+཮22 ......................................................................................... 13 
+߀߸“ຎ”ࢅݴ“ፕ”ݴ15 
+՗8 ........................................................................................... 16 
+཮26཮27 ............................................................................ 17 
+߀߸“ᇸ”ࢅݴ“ఇె๼෇”ݴ18 
+߀߸“უᇸ/ഗ”ݴ20 
+՗6 ................................................................... 8
+཮37 ................................................................... 25 
+཮38 ................................................................... 26
+༬Ⴀ ................................................................................................... 1
+ᆌᆩ ................................................................................................... 1
+ీ઀཮ ........................................................................................... 1
+ຎ ................................................................................................... 1
+૦๏ ........................................................................................... 2
+߭ࡀ3
+߭ࡀ6
+ኵ ............................................................................. 8
+ ESDߢ8
+ీ௮ຎ ..................................................................... 9
+ፕ༬Ⴀ ................................................................................ 11
+ຍᇕ ................................................................................................. 14
+ፕᇱ૙ ....................................................................................... 15
+ຎ  ........................................................................................ 15
+ፕ  ........................................................................... 15
+ຕ  ................................................................................ 16
+႙૶থ཮  ............................................................................ 17
+! ఇె๼෇  ................................................................................ 18
+ഗ჋ስ  ................................................................... 20
+؜/ ๼෇ ............................................................ 20
+ᇸ  ........................................................................................ 22
+एጚᇸྺ ADCۉࠃ22
+ຕጴথ੨ ........................................................................................ 23
+ൽ /ႀ෇ǈ੺໏ዷऐ ....................................... 23
+ൽ /ዷऐ .............................. 23
+ൽ /ዷऐ .......................... 23
+ഗǈ CFG .............................................................. 23
+ཚᆩ้Ⴞ  ................................................ 25
+ཚᆩ้Ⴞ  ................................................ 26
+Ⴞଚഗ  ........................................................................... 27
+ൽ /ႀ෇ .............................. 28
+ൽ /ႀ෇ .............................. 29
+ᆌᆩႷኪ ........................................................................................ 30
+! քਆք၍  ............................................................................... 30
+ AD7682/AD7689ࠚ30
+٫؅31
+ኸళ  ................................................................................ 31
+ሺे཮31ǗዘႎಇႾ .................................................................. 20 
+߀߸“ഗ ”त“უ
+ᇸ”ݴ21 
+ሺे཮32཮33 ............................................................................ 21 
+߀߸“ᇸ”ݴ22 
+߀߸“ຕጴথ੨ ”Ă “ൽ /ዷ
+ऐ”ࢅݴ“ഗǈCFG”ݴ23 
+՗10 ......................................................................................... 24 
+ሺे“ཚᆩ้Ⴞ”཮37 ...................... 25 
+ሺे“ཚᆩ้Ⴞ”཮38 ....................... 26 
+ሺे“Ⴞଚഗ”཮39 ................................................. 27 
+߀߸“ ൽ / ႀ෇ ”
+཮41 ................................................................................... 28 
+߀߸“ ൽ / ႀ෇ ”
+཮43 ................................................................................... 29 
+߀߸AD7682/AD7689ࠚ”ݴ30 
+“٫؅”ಎጀ๥ ..................................... 31 
+ኸళ ................................................................................ 31
+AD7682/AD7689 
+ AD7682/AD7689
+ 
+Rev. B | Page 3 of 32 
+՗2 
+ຕ! ཉॲ0ጀ๥!
+AD7689A AD7682B/AD7689B 
+࿋ኵ
+RESOLUTION  16   16   Bits 
+       
+0  +V REF 0  +V REF V 
+−VREF/2  +V REF/2 −V REF/2  +V REF/2  
+−0.1  V REF + 0.1 −0.1  V REF + 0.1 V 
+−0.1  +0.1 −0.1  +0.1 V 
+VREF/2 − 0.1 V REF/2 V REF/2 + 0.1 V REF/2 − 0.
+1 
+VREF/2 V REF/2 + 0.1 V 
+ 68   68  dB 
+ 1   1  nA 
+         
+        
+        
+VDD = 4.5 V ዁ 5.5 V  0  250 0  250 kSPS 
+VDD = 2.3 V ዁ 4.5 V 0  200 0  200 kSPS 
+VDD = 4.5 V ዁ 5.5 V  0  62.5 0  62.5 kSPS 
+VDD = 2.3 V ዁ 4.5 V 0  50 0  50 kSPS 
+  1.8   1.8 
+   14.5   14.5 
+        
+ 15   16   Bits 
+ −4  +4 −1.5 ±0.4 +1.5 LSB 3
+ 
+    −1 ±0.25 +1.5 LSB 
+REF = VDD = 5 V  0.6   0.5  LSB 
+ −32  +32 −8 ±1 +8 LSB 
+  ±2  −4 ±0.5 +4 LSB 
+  ±1   ±1  ppm/°C 
+VDD = 4.5 V ዁ 5.5 V −32  +32 −8 ±1 +8 LSB 
+VDD = 2.3 V ዁ 4.5 V  ±32   ±5  LSB 
+  ±2  −4 ±0.5 +4 LSB 
+  ±1   ±1  ppm/°C 
+VDD = 5 V ± 5%  ±1.5   ±1.5  LSB 
+        
+  90.5   93.8  dB 6
+fIN = 20 kHz, VREF = 5 V  90  92.5 93.5  dB 
+f IN = 20 kHz, VREF = 4.096 V, 
+ాև REF  
+ 89  91 92.3  dB 
+f IN = 20 kHz, VREF = 2.5 V, 
+ాև REF 
+ 86  87.5 88.8  dB 
+fIN = 20 kHz, VREF = 5 V  89  91 92.5  dB 
+f IN = 20 kHz, VREF = 5 V,  
+−60 dB ๼෇
+ 30.5   33.5  dB 
+f IN = 20 kHz, VREF = 4.096 V 
+ాևḤREF 
+ 88  90 91  dB 
+f IN = 20 kHz, VREF = 2.5 V 
+ాև REF 
+ 86  87 88.4  dB 
+!߭ࡀ
+ଷᆶຫ௽ǈVDD = 2.3 V዁5.5 VǈVIO = 1.8 V዁VDDǈVREF = VDDᇀTMIN዁TMAXჾă 
+ఇె๼෇ 
+ྷ  
+უ  
+! ఇె๼෇ CMRR 
+ 25°Cୁ 
+! ๼෇ፆੇ 1
+ཾུ໏୲ 
+໏୲  
+੻ 2
+  ¼੻2
+! ຨༀၚᆌ  
+܈ 
+ ࿮฿ஓ 
+ ֶ 
+ ֶ 
+ ሂദሯำ 
+ ֶ4
+ ೅ದ 
+ ࿒೏ 
+ ֶ4
+ ೅ದ 
+ ࿒೏ 
+ ܈ 
+܈5
+ྷ 
+႑ሯԲ 
+SINAD 
+टႠఇ๕ 
+ມटႠఇ๕ 
+fIN= 250 kHz 
+܎
+ࢅ
+ມटႠఇ๕ 
+ईCOM๼෇,टႠఇ๕ 
+ईCOM๼෇,ມटႠఇ๕  
+੻!
+঩ሂǈ¼੻!
+AD7682/AD7689 
+ 
+Rev. B | Page 4 of 32 
+AD7689A AD7682B/AD7689B 
+fIN = 20 kHz  −97   −100  dB 
+fIN = 20 kHz  105   110  dB 
+fIN = 100 kHz
+ڢ
+−120   −125  dB 
+        
+ 1.7   1.7  MHz 
+ 0.425   0.425  MHz 
+ 2.5   2.5  ns 
+ኵ
+ጺၿհ฿ኈ(THD)
+ 
+ྷ 
+ඡ
+ༀႠీ 
+ -3 dB੻ 
+׿  
+੻ 
+¼੻ 
+VDD = 5 V 
+1 ९“ఇె๼෇”ݴ
+2 ഗዐยዃă 
+3 LSBᆶၳ࿋ă5 Vྷ้ǈ1 LSB = 76.3 μVă 
+4 ९“ຍᇕ”၅ă 
+5 ଷᆶຫ௽ǈVDD = 5 Vă 
+6 Ԟ(dB)๼෇FSRײ0.5 dB๬ă
+
+ 
+Rev. B | Page 5 of 32 
+՗3 
+ຕ! ཉॲ0ጀ๥!
+ࡽ/प
+࿋!ኵ
+     
+2.5 V, @ 25°C 2.490 2.500 2.510 V 
+4.096 V, @ 25°C 4.086 4.096 4.106 V 
+2.5 V, @ 25°C  1.2  V 
+4.096 V, @ 25°C  2.3  V 
+  ±300  μA 
+  ±10  ppm/°C 
+VDD = 5 V ± 5%  ±15  ppm/V 
+1000 ၭ้!  50  ppm 
+CREF = 10 μF   5  ms 
+     
+REF ๼෇! 0.5  VDD + 0.3 V 
+REFIN !*؋࣐0.5  VDD − 0.5 V 
+ 250 kSPS, REF = 5 V  50  μA 
+     
+@ 25°C  283  mV 
+  1  mV/°C 
+     
+     
+ −0.3  +0.3 × VIO V 
+ 0.7 × VIO  VIO + 0.3 V 
+ −1  +1 μA 
+ −1  +1 μA 
+     
+     
+     
+ISINK = +500 μA   0.4 V 
+ISOURCE = −500 μA VIO − 0.3   V 
+    
+2.3  5.5 V 
+1.8  VDD + 0.3 V 
+ 50  nA 
+ 1.7  μW 
+ 3.5  mW 
+ 12.5 18 mW 
+ 15.5 21 mW 
+ 60  nJ 
+     
+TMIN ዁ TMAX −40  +85 °C 
+ 
+AD7682/AD7689
+ଷᆶຫ௽ǈVDD = 2.3 V዁5.5 VǈVIO = 1.8 V዁VDDǈVREF = VDDᇀTMIN዁TMAXჾă 
+უᇸ 
+ REFუ 
+ REFINუ1
+ REFୁ 
+೏ᅎ  
+ኝ୲  
+೺೏ᅎ  
+! ਸഔॺ૬้क़  
+უᇸ 
+ྷ  
+ୁ 2
+ഗ 
+ უ3
+ ܈ 
+؜ 
+๕ 4
+׿5
+ V OL
+ V OH
+ᇸ 
+ VDD 
+ VIO 
+ୁ 6,7
+ࡼࠀ  
+ీଉ  
+Ⴀీ 
+Ⴀీ 
+VDDࢅVIO = 5 Vǈ25°C 
+VDD = 2.5 Vǈ100 SPSཾུ໏୲ 
+VDD = 2.5 Vǈ200 kSPSཾུ໏୲ 
+VDD = 5 Vǈ250 kSPSཾུ໏୲ 
+VDD = 5 Vǈ250 kSPSཾུ໏୲ǈాևएጚᇸ 
+VDD = 5V 
+ྷ8
+ Ⴀీ 
+ຕጴ๼෇ 
+ೝ  
+  V IL
+  V IH
+  I IL
+  I IH
+1 ă 
+2 ኟԲă 
+3 ᆩഗ๼෇ă 
+4 ႜ16৊዆ă 
+ႜ 16৊዆ցஓă 
+5 ૬न੗ᆩă 
+6 ਍Ⴔᄲǈ໯ᆶຕጴ๼෇ഽ዆থVIOईGNDă 
+7 ă 
+8 ྷ൩૴ဣADI՗ă 
+
+ 
+Rev. B | Page 6 of 32 
+ 
+՗4. 
+ຕ1ፌၭኵ   ႙ኵ ࿋
+tCONV   2.2 μs 
+tACQ 1.8   μs 
+tCYC 4.0   μs 
+tDATA   1.2 μs 
+tCNVH 10   ns 
+tSCK t DSDO  + 2   ns 
+tSCKL 11   ns 
+tSCKH 11   ns 
+tHSDO 4   ns 
+tDSDO     
+   18 ns 
+   23 ns 
+   28 ns 
+tEN     
+   18 ns 
+   22 ns 
+   25 ns 
+tDIS   32 ns 
+tCLSCK 10   ns 
+tSDIN 5   ns 
+tHDIN 5   ns 
+ 
+AD7682/AD7689 
+߭ࡀ 
+ଷᆶຫ௽ǈVDD = 4.5 V዁5.5 VǈVIO = 1.8 V዁VDDᇀTMIN዁TMAXჾă 
+้क़ǖCNVฉืᄂ዁ຕ਍੗ᆩ 
+ण้क़ 
+้क़ 
+೺क़ຕ਍ႀ෇/ൽ 
+CNV܈ 
+SCKዜ೺ 
+SCKೝ้क़ 
+SCKೝ้क़ 
+SCKူইᄂ዁ຕ਍ධ඗ᆶၳ 
+SCK้क़ 
+ VIOᇀ2.7 V 
+ VIOᇀ2.3 V 
+ VIOᇀ1.8 V 
+CNVೝ዁SDO D15 MSBᆶၳ 
+ VIOᇀ2.7 V 
+ VIOᇀ2.3 V 
+ VIOᇀ1.8 V 
+CNV߲SCKူইᄂ዁SDOፆༀ 
+CNVೝ዁SCKฉืᄂ 
+SCKฉืᄂ዁DINᆶၳยዃ้क़ 
+SCKฉืᄂ዁DIN้क़ 
+1 ९཮2཮3ă
+
+ 
+Rev. B | Page 7 of 32 
+ 
+Table 5.  
+tCONV   3.2 μs 
+tACQ 1.8   μs 
+tCYC 5   μs 
+tDATA   1.2 μs 
+tCNVH 10   ns 
+tSCK t DSDO + 2   ns 
+tSCKL 12   ns 
+tSCKH 12   ns 
+tHSDO 5   ns 
+tDSDO     
+   24 ns 
+   30 ns 
+   38 ns 
+   48 ns 
+tEN     
+   21 ns 
+   27 ns 
+   35 ns 
+   45 ns 
+tDIS   50 ns 
+tCLSCK 10   ns 
+tSDIN 5   ns 
+tHDIN 5   ns 
+ 
+IOL
+500μA
+500μA
+IOH
+1.4VTO SDO
+CL
+50pF
+07353-002 
+ 
+ 
+30% VIO
+70% VIO
+2V OR VIO – 0.5V1
+0.8V OR 0.5V20.8V OR 0.5V2
+2V OR VIO – 0.5V1
+tDELAY tDELAY
+1 2V IF VIO ABOVE 2.5V, VIO – 0.5V IF VIO BELOW 2.5V.
+2 0.8V IF VIO ABOVE 2.5V, 0.5V IF VIO BELOW 2.5V.
+07353-003 
+AD7682/AD7689
+ଷᆶຫ௽ǈVDD = 2.3 V዁4.5 VǈVIO = 1.8 V዁VDDᇀTMIN዁TMAXჾă 
+ຕ1ፌၭኵ   ႙ኵ ࿋
+้क़ǖCNVฉืᄂ዁ຕ਍੗ᆩ 
+ण้क़ 
+้क़ 
+೺क़ຕ਍ႀ෇/ൽ 
+CNV܈ 
+SCKዜ೺ 
+SCKೝ้क़ 
+SCKೝ้क़ 
+SCKူইᄂ዁ຕ਍ධ඗ᆶၳ 
+SCK้क़ 
+ VIOᇀ3 V 
+ VIOᇀ2.7 V 
+ VIOᇀ2.3 V 
+ VIOᇀ1.8 V 
+CNVೝ዁SDO D15 MSBᆶၳ 
+ VIOᇀ3 V 
+ VIOᇀ2.7 V 
+ VIOᇀ2.3 V 
+ VIOᇀ1.8 V 
+CNV߲SCKူইᄂ዁SDOፆༀ 
+CNVೝ዁SCKฉืᄂ 
+SCKฉืᄂ዁DINᆶၳยዃ้क़ 
+SCKฉืᄂ዁DIN้क़
+1 ९཮2཮3ă 
+཮2.ୟ 
+཮3.ೝ 
+
+ 
+Rev. B | Page 8 of 32 
+ኵ!
+՗6 
+ኵ
+ 
+GND − 0.3 V ዁ VDD + 0.3 V 
+ई VDD ± 130 mA 
+GND − 0.3 V ዁ VDD + 0.3 V 
+ 
+−0.3 V ዁ +7 V 
+−0.3 V ዁ VDD + 0.3 V 
+−0.3 V ዁ VIO + 0.3 V 
+−0.3 V ዁ VIO + 0.3 V 
+−65°C ዁ +150°C 
+150°C 
+47.6°C/W  
+4.4°C/W  
+ 
+ESDߢ 
+ 
+ 
+AD7682/AD7689 
+ఇె๼෇ 
+ INx 1ĂCOM1
+REFĂREFIN 
+უ 
+ VDD ĂVIO዁GND 
+ VIO ዁VDD 
+DINĂCNVĂSCK዁GND 
+SDO዁GND 
+ྷ 
+঳࿒ 
+θJAඤፆ(LFCSP) 
+θJCඤፆ(LFCSP) 
+1 ݴ
+ዂഗॲᆦ৳Ⴀ໦
+ኵǈփ՗๖ሞኄၵཉॲူईኁሞඪ
+ཉॲူǈഗॲ
+ᆖၚ
+੗੍Ⴀă 
+ESD(ۉݣۉ)ഗॲă
+ݣ
+ሞ
+ీଉ ESDǈᆌ
+ڦړESDแǈᅜՆ௨ഗॲႠీူ
+ీෟ฿ă
+
+ 
+Rev. B | Page 9 of 32 
+PIN 1
+INDICATOR1VDD
+2REF
+NOTES
+1. NC = NO CONNECT.
+2. THE EXPOSED PAD IS NOT CONNECTED
+   INTERNALLY. FOR INCREASED
+   RELIABILITY OF THE SOLDER JOINTS, I T
+   IS RECOMMENDED THAT THE PAD BE
+   SOLDERED TO THE SYSTEM
+   GROUND PLANE.
+3REFIN
+4GND
+5GND
+13 SCK
+14 SDO
+15 VIO
+12 DIN
+11 CNV
+6
+NC
+7
+IN2
+8
+NC
+01
+COM
+9
+IN3
+81
+IN1
+91
+NC
+02
+VDD
+71
+NC
+61
+IN0
+TOP VIEW
+(Not to Scale)
+AD7682
+07353-004 
+PIN 1
+INDICATOR1VDD
+2REF
+3REFIN
+4GND
+5GND
+13 SCK
+14 SDO
+15 VIO
+12 DIN
+11 CNV
+6
+IN4
+7
+IN5
+8
+IN6
+01
+COM
+9
+IN7
+81
+IN2
+91
+IN3
+02
+VDD
+71
+IN1
+61
+IN0
+TOP VIEW
+(Not to Scale)
+AD7689
+07353-005
+NOTES
+1. THE EXPOSED PAD IS NOT CONNECTED
+    INTERNALLY. FOR INCREASED
+    RELIABILITY OF THE SOLDER JOINTS, IT
+    IS RECOMMENDED THAT THE PAD BE
+    SOLDERED TO THE SYSTEM
+    GROUND PLANE.  
+՗7. ీ௮ຎ  
+ᆅগ
+ࡽ
+AD7682
+׬
+AD7689
+׬ ૌ႙1 ௮ຎ 
+1, 20 VDD VDD P 
+2 REF REF AI/O 
+3 REFIN REFIN AI/O  
+4, 5 GND GND P 
+6 NC IN4 AI 
+7 IN2 IN5 AI 
+8 NC IN6 AI 
+9 IN3 IN7 AI 
+10 COM COM AI 
+11 CNV CNV DI 
+12 DIN  DIN  DI 
+13 SCK SCK DI 
+AD7682/AD7689
+཮4. AD7682ᆅগದዃ ཮5. AD7689ᆅগದዃ 
+ీ௮ຎ!
+ࡗ10 μFࢅ100 nFኵྺ2.5 V዁5.5 Vă 
+ࠃ2.5 Vǈፌၭኵᆌྺ3.0 Vă 
+ࠃ4.096 Vǈፌၭኵᆌྺ4.6 Vă 
+უ๼෇/९“؜/๼෇”ă 
+߲2.5 V ई4.096 Vუă্ᆩాևए
+ഗ้ǈREFิREFINᆅগ(ኵVDD − 0.5 V)ႚ๕
+൧઄ă 
+ڟREF(0.5 V዁VDD)ă 
+߲10 μFඹᆌ৑੗ీ੍ৎ
+REF९“უᇸඁ᳘”ă 
+؜/९“؜/๼෇”ă 
+߲0.1 μFඹඁ᳘ă 
+߲0.5 V ዁(VDD − 0.5 V)༵
+ߴࠃREFᆅগǈ९REFᆅগ௮ຎă 
+๼෇ăሞฉืᄂǈCNVࡕCNV஬ኸ๖ഗ
+๑ీă 
+๼෇ᆩᇀႀ෇ 14٪
+ഗă 
+๼෇ᆩᇀྺᅜ MSB๕ሞSDOຕ਍ᅜतሞDINฉ๼෇
+้ዓă 
+ă 
+AD7682ǖփ૶থă
+AD7689ڢ4ă 
+AD7682ڢ2ă
+AD7689ڢ5ă 
+AD7682ǖփ૶থă
+AD7689ڢ6ă 
+AD7682ڢ3ă
+AD7689ڢ7ă 
+ڢIN[7:0])߲0 VईVREF/2 Vă
+
+ 
+Rev. B | Page 10 of 32 
+ᆅগ
+ૌ႙1 ௮ຎ 
+AD7689
+׬  
+14 SDO SDO DO 
+15 VIO VIO P 
+16 IN0 IN0 AI 
+17 NC IN1 AI 
+18 IN1 IN2 AI 
+19 NC IN3 AI 
+21 
+(EPAD) 
+Exposed Pad 
+(EPAD) 
+Exposed 
+Pad (EPAD) 
+NC 
+ 
+AD7682/AD7689 
+AD7682
+׬
+ǈᇑ SCKྺ
+৊዆ցஓă 
+๼෇/ᇸ၎ཞ(1.8 VĂ2.5 VĂ3 Vई
+5 V)ă 
+ڢ0ă 
+AD7682ǖփ૶থă
+AD7689ڢ1ă 
+AD7682ڢ1ă
+AD7689ڢ2ă 
+AD7682ǖփ૶থă
+AD7689ڢ3ă 
+ă 
+1 AI = ఇె๼෇ǈAI/O = ఇె๼෇/ǈDI = ຕጴ๼෇ǈDO = ǈP = ᇸǈNC = փሞాև૶থă 
+
+ 
+Rev. B | Page 11 of 32 
+ፕ༬Ⴀ!
+1.5
+1.0
+0.5
+0
+–0.5
+–1.5
+–1.0 INL (LSB)
+CODES
+0 16,384 32,768 49,152 65,536
+INL MAX = +0.34 LSB
+INL MIN = –0.44 LSB
+07353-009
+200k
+180k
+160k
+140k
+120k
+100k
+80k
+60k
+40k
+20k
+0
+7FFA
+COUNTS
+CODE IN HEX
+7FFB 7FFC 7FFD 7FFE 7FFF 8000 8001 8002
+0 0 487 619 0 0 0
+ȶ = 0.50
+VREF = VDD = 5V
+135,326
+124,689
+07353-007
+0
+–20
+–40
+–60
+–80
+–100
+–120
+–140
+–160
+–180
+500 25 75 100 125
+AMPLITUDE (dB of Full-Scale)
+FREQUENCY (kHz)
+VREF = VDD = 5V
+fS= 250kSPS
+fIN = 19.9kHz
+SNR = 92.9dB
+SINAD = 92.4dB
+THD = –102dB
+SFDR = 103dB
+SECOND HARMONIC = –111dB
+THIRD HARMONIC = –104dB
+07353-008
+1.5
+07353-006
+1.0
+0.5
+0
+–0.5
+–1.0
+0 16,384 32,768 49,152 65,536
+DNL (LSB)
+CODES
+DNL MAX = +0.20 LSB
+DNL MIN = –0.22 LSB
+160k
+140k
+120k
+100k
+80k
+60k
+40k
+20k
+0
+COUNTS
+CODE IN HEX
+7FFB 7FFC 7FFD 7FFE 7FFF 8000 8001 8002 8003
+17 8
+6649
+51,778
+4090 60 1
+ȶ = 0.78
+VREF = VDD = 2.5V
+63,257
+135,207
+07353-010
+0
+–20
+–40
+–60
+–80
+–100
+–120
+–140
+–160
+–180
+500 25 75 100
+AMPLITUDE (dB of Full-Scale)
+FREQUENCY (kHz)
+VREF = VDD = 2.5V
+fs= 200kSPS
+fIN = 19.9kHz
+SNR = 88.0dB
+SINAD = 87.0dB
+THD = –89dB
+SFDR = 89dB
+SECOND HARMONIC = –105dB
+THIRD HARMONIC = –90dB
+07353-011
+ଷᆶຫ௽ǈVDD = 2.5 V዁5.5 VǈVREF = 2.5 V዁5 VǈVIO = 2.3 V዁VDDă
+AD7682/AD7689
+཮6. ဣǈVREF = VDD = 5 V
+཮7. ዹጒ཮(ஓዐ႐)
+཮8. 20 kHz FFTǈVREF = VDD = 5 V
+཮9. ဣǈVREF = VDD = 5 V
+཮10. ዹጒ཮)ஓዐ႐*
+཮11. 20 kHz FFTǈVREF = VDD = 2.5 V
+
+ 
+Rev. B | Page 12 of 32 
+100
+95
+90
+85
+80
+75
+70
+65
+60
+05 0 1 0 0 1 5 0 2 0 0
+SNR (dB)
+FREQUENCY (kHz)
+VREF = VDD = 5V, –0.5dB
+VREF = VDD = 5V, –10dB
+VREF = VDD = 2.5V, –0.5dB
+VREF = VDD = 2.5V, –10dB
+07353-041
+96
+94
+92
+90
+88
+86
+84
+82
+80
+17.0
+16.5
+16.0
+15.5
+15.0
+14.5
+14.0
+13.5
+13.0
+1.0
+SNR, SINAD (dB)
+ENOB (Bits)
+REFERENCE VOLTAGE (V)
+1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5
+SNR @ 2kHz
+SINAD @ 2kHz
+SNR @ 20kHz
+SINAD @ 20kHz
+ENOB @ 2kHz
+ENOB @ 20kHz
+07353-013
+96
+94
+92
+90
+88
+86
+84
+–55
+SNR (dB)
+TEMPERATURE (°C)
+–35 –15 5 25 45 65 85 105 125
+fIN = 20kHz
+VREF = VDD = 5V
+VREF = VDD = 2.5V
+07353-014
+100
+95
+90
+85
+80
+75
+70
+65
+60
+0 50 100 150 200
+SINAD (dB)
+FREQUENCY (kHz)
+VREF = VDD = 5V, –0.5dB
+VREF = VDD = 5V, –10dB
+VREF = VDD = 2.5V, –0.5dB
+VREF = VDD = 2.5V, –10dB
+07353-012
+130
+125
+120
+115
+110
+105
+100
+95
+90
+85
+80
+75
+      70
+1.0
+SFDR (dB)
+–60
+–65
+–70
+–75
+–80
+–85
+–90
+–95
+–100
+–105
+–110
+–115
+–120
+THD (dB)
+REFERENCE VOLTAGE (V)
+1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5
+SFDR = 2kHz
+SFDR = 20kHz
+THD = 2kHz
+THD = 20kHz
+07353-016
+–90
+–95
+–100
+–105
+–110
+–55
+THD (dB)
+TEMPERATURE (°C)
+–35 –15 5 25 45 65 85 105 125
+fIN = 20kHz
+VREF = VDD = 5V
+VREF = VDD = 2.5V
+07353-017
+AD7682/AD7689 
+཮12. SNRဣ
+཮13. SNRĂSINADࢅENOBဣ
+཮14. SNRဣ
+཮15. SINADဣ
+཮16. SFDRࢅTHDဣ
+཮17. THDဣ
+
+ 
+Rev. B | Page 13 of 32 
+–60
+–70
+–80
+–90
+–100
+–110
+–120
+0 50 100 150 200
+THD (dB)
+FREQUENCY (kHz)
+VREF = VDD = 5V, –0.5dB
+VREF = VDD = 2.5V, –0.5dB
+VREF = VDD = 2.5V, –10dB
+VREF = VDD = 5V, –10dB
+07353-015
+95
+94
+93
+92
+91
+90
+89
+88
+87
+86
+85
+–10
+SNR (dB)
+INPUT LEVEL (dB)
+–8 –6 –2 0 –4
+fIN = 20kHz
+VREF = VDD = 5V
+VREF = VDD = 2.5V
+07353-018 
+3
+2
+1
+0
+–1
+–2
+–3 OFFSET ERROR AND GAIN ERROR (LSB)
+–55
+TEMPERATURE (°C)
+–35 –15 5 25 45 65 85 105 125
+UNIPOLAR ZERO
+UNIPOLAR GAIN
+BIPOLAR ZERO
+BIPOLAR GAIN
+07353-020 
+3000
+2750
+2500
+2250
+2000
+1750
+1500
+1250
+1000
+100
+90
+80
+70
+60
+50
+40
+30
+20
+2.5 3.0 3.5 4.0 4.5 5.0 5.5
+VDD CURRENT (μA)
+VIO CURRENT (μA)
+VDD SUPPLY (V)
+2.5V INTERNAL REF
+4.096V INTERNAL REF
+INTERNAL BUFFER, TEMP ON
+INTERNAL BUFFER, TEMP OFF
+EXTERNAL REF , TEMP ON
+EXTERNAL REF , TEMP OFF
+VIO
+fS = 200kSPS
+07353-021
+3000
+2750
+2500
+2250
+2000
+1750
+1500
+1250
+1000
+180
+160
+140
+120
+100
+80
+60
+40
+20
+VDD CURRENT (μA)
+VIO CURRENT (μA)
+–55
+TEMPERATURE (°C)
+–35 –15 5 25 45 65 85 105 125
+fS = 200kSPS
+VDD = 5V, INTERNAL 4.096V REF
+VDD = 5V, EXTERNAL REF
+VDD = 2.5, EXTERNAL REF
+VIO
+07353-022 
+07353-023
+SDO CAPACITIVE LOAD (pF)
+1200 2 04 06 08 0 1 0 0
+tDSDO DELAY (ns)
+25
+20
+15
+10
+5
+0
+VDD = 2.5V, 85°C
+VDD = 3.3V, 25°C
+VDD = 3.3V, 85°C
+VDD = 5V, 85°C
+VDD = 5V, 25°C
+VDD = 2.5V, 25°C
+ 
+ 
+ 
+AD7682/AD7689
+཮18. THDဣ
+཮19. SNRဣ
+཮20. ဣ
+཮21. ဣ
+཮22. ဣ
+཮23. tDSDOᇑSDOဣ
+
+ 
+Rev. B | Page 14 of 32 
+ 
+ຍᇕ
+ᆶၳ࿋(LSB) 
+LSBᇀNఇຕ
+ഗǈLSBუ՗๖ྺǖ
+၍Ⴀ(INL) 
+INLڦ
+ڦ½ 
+LSB࣑1½ LSBᅃ
+९཮
+25*ă 
+၍Ⴀ(DNL) 
+૙ၙADC၎ਐ1 LSB ăDNL๟ኸํाኵ
+Ր୲ઠ௮
+ă 
+!ֶ
+ߛں½ LSBೝă฿
+ă 
+!ֶ
+ٗ)࣑111 … 10ڟ111 … 11஢
+ײ1½ LSBኮ
+ǈᆩ
+LSB(Բ)߁߲
+ֶ(ᄺᆩLSBԲ՗๖)ࢫ
+ᆖၚă 
+!׿
+ٗCNV๼෇႑
+้क़ă 
+ຨༀၚᆌ!
+ǈ ADC๼෇৊ႜ
+้क़ă 
+ྷ!
+ڦڥ֪
+Ԟ(dB)՗๖ă
+AD7682/AD7689 
+႑ሯԲ(SNR) 
+SNRၿ
+Ԟ
+(dB)՗๖ă 
+႑భԲ(SINAD) 
+SINADኵᇑలઊຯ༬ೕ୲ᅜူԈ
+ኮԲǈ
+Ԟ(dB)՗๖ă 
+ጺၿհ฿ኈ(THD) 
+THD਩
+Ԟ(dB)՗๖ă 
+ྷ(SFDR) 
+SFDRݴ
+Ԟ(dB)՗๖ă 
+ᆶၳ࿋ຕ(ENOB) 
+ENOBՐ୲ă໲ᇑ SINAD࠲ڦ
+ဣ੗ᅜ՗๖ྺǖ 
+໲ᆩ࿋՗๖ă 
+ඡ!
+֪
+஢ଉ
+ײ100 kHzڢ
+Ԟ(dB)՗๖ă 
+ဣຕ!
+ဣຕ๟ǈሞTMINĂT̵25°C)ࢅTMAXፌ
+უ (VREF)ᇑሞ25°Cۆڦ
+႙ೋᅎă໲ᆩppm/°C๕ྺǖ
+ഄዐǖ 
+VREF (Max)ྺTMINĂT (25°C)ईTMAXٷVREFă 
+VREF (Min)ྺTMINĂT (25°C)ईTMAXፌၭVREFă 
+VREF (25°C)ྺ25°CڦVREFă 
+TMAX = +85°C. 
+TMIN = –40°C. 
+ $'$'
+ 
+Rev. B | Page 15 of 32 
+ፕᇱ૙!
+SW+MSB
+16,384C
+INx+
+LSB
+COMP CONTROL
+LOGIC
+SWITCHES CONTROL
+BUSY
+OUTPUT CODE
+CNV
+REF
+GND
+INx– OR
+COM
+4C 2C C C32,768C
+SW–MSB
+16,384C
+LSB
+4C 2C C C32,768C
+07353-026 
+ 
+཮24. ADCୟ཮
+ፕ!
+AD7682/AD7689ದ DAC԰ৎ႙
+ADCă཮24޿ADCୟ཮ăඹႠ DACࡤ2
+ڦ16Բডഗ
+ă 
+ࡗSW+ࢅ
+SW-ڟGNDă 
+णINx+ࢅINx−)ईCOM*
+൐ CNVۉߛ
+ਸ๔้ǈ SW+ࢅ
+SW-ǈ2ڟ
+GNDڦڟINx+ᇑINx−
+)ईCOMڞ
+ăሞ GNDᇑREFڦ
+უօ৊
+)VREF/2ĂVREF/4 . . . V REF/32,768ٗMSBਸ
+ጒༀă
+ิ ADC๼
+ኸ๖ă 
+AD7682/AD7689փ
+ႜ้ዓSCKă
+ຎ!
+AD7682/AD7689๟4/8Ă16԰ৎस
+ഗ(SAR)ഗ (ADC)࣑250,000߲
+ۅ250 kSPS)ᆩྔևए
+უᇸժᅜ1 kSPSྺ17 μW׉ݥ
+ᆌᆩă 
+AD7682/AD7689ڦ
+ǈԈઔǖ 
+t 16ڦSAR ADC 
+t 4/8ᆩഗ 
+t ؋࣐ࢅ 
+t ഗ 
+t ୳հഗ 
+t Ⴞଚഗ 
+߲SPIڦ14঳
+ᄺ๟ SPIൽǈժ
+ದዃă 
+AD7682/AD7689ഗǈுᆶୁ຤
+ă 
+AD7682/AD7689უྺ2.3 V዁5.5 Vǈ੗ᅜᇑඪ
+ࢆ1.8 V ዁5 Vᆩ20ᆅগĂ4 
+mm × 4 mm LFCSPጎǈবู੣क़ǈದዃଳऄăAD7682/ 
+AD7689ᇑ16࿋AD7699ࢅ14࿋AD7949ᆅগग़ඹă
+
+ 
+Rev. B | Page 16 of 32 
+100...000
+100...001
+100...010
+011...101
+011...110
+011...111
+TWOS
+COMPLEMENT
+STRAIGHT
+BINARY
+000...000
+000...001
+000...010
+111...101
+111...110
+111...111
+ADC CODE
+ANALOG INPUT
++FSR – 1.5LSB
++FSR – 1LSB–FSR + 1LSB–FSR
+–FSR + 0.5LSB
+07353-027 
+ 
+՗8. უ 
+௮ຎ
+टႠఇె๼෇1
+VREF= 4.096 V 
+ஓ
+(৊዆ஓ) 
+ມटႠఇె๼෇2
+VREF= 4.096 V 
+  ஓ
+(৊዆ցஓ)
+4.095938 V 0xFFFF 3 2.047938 V 0x7FFF 3 
+2.048063 V 0x8001 0x0001 
+2.048 V 0x8000 0 V 0x0000 
+2.047938 V 0x7FFF 0xFFFF 
+0x0001 −2.047938 V 0x8001 
+0 V 0x0000 4 −2.048 V 0x8000 4 
+ຕ!
+ǈ COMǈई INx−
+৊዆ă 
+ྷ้)COM=VREF/2ईINx− = VREF/2ֶڦ
+৊዆ցஓă 
+AD7682/AD7689༬Ⴀස཮ 25໯๖ǈഄዐ၂๖କ
+๑ᆩ4.096 Vྷă
+AD7682/AD7689 
+཮25. ADCຕ
+FSR − 1 LSB 
+ೝ + 1 LSB 
+ೝ 
+ೝ − 1 LSB 
+−FSR + 1 LSB 
+−FSR 
+1 COMईINx− = 0 Vǈईኁ໯ᆶInxᅜGND੊ă 
+2 COM ईINx− = VREF /2ă 
+3 ఇె๼෇)(INx+) − (INx−)ईCOMᇀVREF − GNDஓă 
+4 ఇె๼෇)(INx+) − (INx−)ईCOMᇀGNDஓă
+
+ 
+Rev. B | Page 17 of 32 
+႙૶থ཮!
+AD7689
+REF
+GND
+VDD VIO
+DIN MOSI
+MISO
+SS
+SCKSCK
+SDO
+CNV
+100nF100nF
+5V
+10μF2
+V+
+V–
+1.8V TO VDD
+0V TO VREF
+0V TO VREF
+V+
+V–
+ADA4841-x3
+ADA4841-x3
+1. INTERNAL REFERENCE SHOWN. SEE VOLTAGE REFERENCE OUTPUT/INPUT SECTION FOR
+REFERENCE SELECTION.
+NOTES
+2. CREF IS USUALLY A 10μF CERAMIC CAPACITOR (X5R).
+3. SEE THE DRIVER AMPLIFIER CHOICE SECTION FOR ADDITIONAL RECOMMENDED AMPLIFIERS.
+4. SEE THE DIGITAL INTERFACE SECTION FOR CONFIGURING AND READING CONVERSION DATA.
+IN0
+IN[7:1]
+COM
+REFIN
+100nF
+0V OR
+VREF/2
+07353-028  
+REF
+GND
+VDD VIO
+DIN MOSI
+MISO
+SS
+SCKSCK
+SDO
+CNV
+100nF
+100nF
++5V
+10μF2
+V+
+V–
+V–
+1.8V TO VDD
+V+
+NOTES
+1. INTERNAL REFERENCE SHOWN. SEE VOLTAGE REFERENCE OUTPUT/INPUT SECTION FOR
+    REFERENCE SELECTION.
+2. CREF IS USUALLY A 10μF CERAMIC CAPACITOR (X5R).
+3. SEE THE DRIVER AMPLIFIER CHOICE SECTION FOR ADDITIONAL RECOMMENDED AMPLIFIERS.
+4. SEE THE DIGITAL INTERFACE SECTION FOR CONFIGURING AND READING CONVERSION DATA.
+IN0
+IN[7:1]
+COM
+REFIN
+100nF
+VREF/2
+VREF p-p
+ADA4841-x3
+ADA4841-x3
+07353-029
+AD7689
+ 
+ 
+AD7682/AD7689
+཮26. ୟ 
+཮27. ୟ 
+
+ 
+Rev. B | Page 18 of 32 
+70
+65
+60
+55
+50
+45
+40
+35
+30
+1 10k10
+CMRR (dB)
+100 1k
+FREQUENCY (kHz)
+07353-031 
+AD7682/AD7689 
+टႠईມटႠ!
+཮26ᇸ้ AD7682/AD7689ॺᅱ
+૶থ཮ă 
+ᇸ!
+཮27ࢅ
+ڦVIOഗ /ࡽ
+ᆶ
+๼෇ದዃǈInxटႠǈժ
+๔ዕᅜGNDუ*ă 
+ᆌ
+ဣ)VREF = 4.096 V
+้ǈ1 LSB = 62.5 μV๑ᆩມटႠ๼෇ದዃ
+ഗ
+੊ ADIິྪበ (www.analog.com )ڦ
+ᆌᆩԴऻ AN-581ǖ“ඁ
+᳘”ă 
+ఇె๼෇!
+ࠓ 
+཮28၂๖କ AD7682/AD7689ୟă 2ܾ߲
+࠶D1ࢅD2ྺఇె๼෇)IN[7:0]ࢅCOMࠃESDăጀ
+ࡆۉࠃࡗג0.3 Vׯ
+ୁă 
+ߛ130 mA๼
+ᇸᇑVDDُ
+ഗॲă
+ܔ׼INx+ᇑCOMईINx+ᇑINx−ڦ
+ᄣă)COMईINx− = GND ± 0.1 VईVREF ± 
+0.1 Vఇ႑
+ǈස཮29໯๖ă
+CINRIN
+D1
+D2CPIN
+INx+
+OR INx–
+OR COM
+GND
+VDD
+07353-030 
+཮28. ୟ
+཮29. ఇె๼෇CMRRဣ
+๟ᆯ RINࢅCIN૴
+ඹ CPINă CPINۉ
+ඹăRIN႙ኵྺ2.2 kΩፆ
+णጺᇮॲăCIN႙ኵྺ27 pF ǈዷᄲԈઔADCᄣ
+ඹă 
+ཚ୳հഗ!
+ਸǈ๼෇ፆੇৈԈઔCPINړAD7682/ 
+AD7689ण้ǈ RIN ᇑCINཚ୳հ
+ሯำă
+ࡗCFG[6]੻ई ¼੻ǈස
+՗10ยዃॽRINՎྺ19 kΩ୳հ
+ྺ ¼੻(BW)
+ยྺ¼ण้क़tACQ
+ዂTHDă 
+
+ 
+Rev. B | Page 19 of 32 
+GND
+COM
+CH0+
+CH3+
+CH1+
+CH2+
+CH4+
+CH5+
+CH6+
+CH7+
+CH0+
+CH3+
+CH1+
+CH2+
+CH4+
+CH5+
+CH6+
+CH7+
+COM–
+GND
+COM
+IN1
+IN0
+IN2
+IN3
+IN4
+IN5
+IN6
+IN7
+IN1
+IN0
+IN2
+IN3
+IN4
+IN5
+IN6
+IN7
+IN1
+IN0
+IN2
+IN3
+IN4
+IN5
+IN6
+IN7
+IN1
+IN0
+IN2
+IN3
+IN4
+IN5
+IN6
+IN7
+A—8 CHANNELS,
+SINGLE ENDED
+B—8 CHANNELS,
+COMMON REFERNCE
+GND
+COM
+CH0+ (–)
+CH1+ (–)
+CH2+ (–)
+CH3+ (–)
+CH0– (+)
+CH1– (+)
+CH0+ (–)
+CH1+ (–)
+CH0– (+)
+CH1– (+)
+CH2– (+)
+CH3– (+)
+C—4 CHANNELS,
+DIFFERENTIAL
+GND
+COM
+CH2+
+CH3+
+CH4+
+CH5+
+D—COMBINATION
+COM–
+07353-032
+ 
+AD7682/AD7689
+๼෇ದዃ!
+཮30ഗ CFG[12:10]փ
+९“ഗǈCFG”ă 
+ఇె๼෇੗ᅜದዃྺǖ 
+t ཮30A੊ǗCFG[12:10] = 1112ă
+! ኄዖದዃዐǈ໯ᆶ๼෇ (IN[7:0])ྷ਩ྺ GND ዁
+VREFă 
+t ཮30BǗ COM = 
+VREF/2ǗCFG[12:10] = 0102ă
+ COMǗCFG[12:10] = 1102ă
+ኄዖದዃዐǈ໯ᆶ๼෇ (IN[7:0])ྷ਩ྺ GND ዁
+VREFă 
+t ཮30Cᅜ VREF/2Ǘ
+CFG[12:10] = 00X2ट
+ǗCFG[12:10] = 10X2ăኄၵದዃዐǈኟ๼෇ཚ
+ྷྺGND዁VREFྺᅜ VREF/2੊
+(ܔ)ईGND(ܔ)ࡗCFG[9:7]ದ
+ࡕCFG[9:7] ྺ౾ຕǈሶ๑ᆩ IN0ĂIN2ĂIN4ࢅ
+IN6ࡕCFG[9:7] ྺആຕǈሶ๑ᆩ IN1ĂIN3ĂIN5ࢅ
+IN7ǈස཮30Cڢ
+ྺIN0ڦIN0/IN1ǈCFG[9:7] = 000 2ྺ
+IN5ڦIN4/IN5ǈCFG[9:7] = 101 2ᇀႾଚ
+ഗ(ၘ९ཚ“Ⴞଚഗ”ݴ)๔ዕྺIN0ĂIN2Ă
+IN4ࢅIN6ă 
+t ཮ 30D՗௽
+AD7682/AD7689ༀದዃ*ă
+Ⴞଚഗ 
+AD7682/AD7689้
+९ “Ⴞ
+ଚഗ”ă 
+ᇸፆੇ 
+ۯAD7682/ 
+AD7689၂ዸᆖၚ঍ୁ༬Ⴀǈ༬՚๟ THDă
+ᇸፆੇൽ
+ጺၿհ฿ኈ (THD)ăTHD๟ᇸ
+ຕă 
+཮30. ᆩఇె๼෇ದዃ
+
+ 
+Rev. B | Page 20 of 32 
+ഗ!
+႙ᆌᆩ
+ADA4841-x
+REF
+GND
+TEMP
+AD7682/
+AD7689
+10μF 100nF
+REFIN
+07353-049 
+ 
+AD8655 
+AD8021 
+AD8022 
+OP184 
+AD8605, AD8615 
+AD7682/AD7689 
+ഗ჋ስ!
+໚඗AD7682/AD7689ഗՂႷ஢ፁ
+ူଚᄲ൱ǖ 
+/g120 ׼
+AD7682/AD7689ڦSNRሯำႠీă൩ጀᅪǈ
+AD7682/AD7689ຕഄ໲ 16࿋ADCǈ
+ǈධ඗੗ీ
+ሯำᆯ RINࢅ
+CINڦׯࠓAD7682/AD7689ཚ୳հഗ
+৊ႜ୳հǈईኁᆯྔև୳հഗ)සᆶ*৊ႜ୳հă
+AD7682/AD7689႙ሯำྺ35 μV rms (VREF= 5V)ǈᅺ
+ڦSNRྺǖ
+!
+! ഄዐǖ  
+ f–3dBྺAD7682/AD7689੻ྺ1.7 MHz ǈ
+¼੻ྺ425 kHzপኹೕ
+୲ă 
+ Nഗದዃ้ྺ1*ă 
+ eN࿋nV/√Hză 
+/g120 ڦTHD Ⴀీᆌᇑ AD7682/ 
+AD7689ă཮18၂๖କAD7682/AD7689ڦTHDᇑೕ
+ဣă 
+/g120 ܔ
+ࢅAD7682/AD7689ୟՂႷ
+ඹንଚᅜ 16࿋຤ೝ(0.0015%)঩ሂăሞ
+ۨࡀ0.1%዁0.01%ڦ
+ॺ૬้क़ăኄ੗ీᇑ 16ॺ૬้क़၂ዸփཞǈ
+჋ስኮമᆌ৊ႜᄓኤă 
+ࡼࠀگ 
+5 Vሯำ 
+ೕ 
+ೕ 
+ೕ
+5 Vࡼࠀگ 
+཮31. 2.5 Vई4.096 Vუᇸ૶থ
+؜/๼෇ 
+AD7682/AD7689უ
+უᇸă 
+AD7682/AD7689Ⴀీǈ੗ᅜ
+ӄᆶ 6ǈස՗ 10
+ă 
+უᇸ/ഗ 
+ຕᆌᆩǈ੗ᅜยዃྺ 2.5 Vई
+4.096 Vǈස՗10უᇸ้ǈREFIN
+߲0.1 μFඹă
+REFINഗǈස
+AD8605უ
+ยዃփཞ(2.5 Vई4.096 V)ǈREFINუᄺփཞă 
+ଉ
+AD7682/AD7689੗ᆩᇀኴႜဣཥၯጚă
+੊ AD7682/ 
+AD7689  GND৊዆ஓă 
+ڟٳ܈10 mV ᅜాăాև
+႙࿒೏ྺ±10 ppm/°Că 
+ස཮31໯๖૶থAD7682/AD7689ǈᅜ๑ᆩ2.5 Vई4.096 Vా
+უᇸă
+
+Rev. B | Page 21 of 32 
+REF
+GND
+TEMP
+AD7682/
+AD7689
+10μF 100nF
+REFIN
+REF SOURCE
+ (VDD – 0.5V)
+ 
+REF
+GND
+TEMP
+10μF
+REFIN
+REF SOURCE
+0.5V < REF < (VDD + 0.3V)
+NO CONNECTION
+ REQUIRED
+07353-047
+AD7682/
+AD7689
+ 
+5
+4. 69002g ol/g32LOSSSNR   
+AD7682/AD7689
+ഗ 
+࣐
+ഗ๑ᆩǈස཮ 32؋࣐
+܋REFINǈժሞREFăྔևएጚ
+ߌد܈
+९՗ 10ǈሺᅮྺ 1ժ൐
+๼෇/၌዆ሞVDD −0.2 VუՂႷၭᇀई
+ᇀ(VDD − 0.5 V)ă 
+ᆶᆩǈᅺྺኄၵ
+ए
+ۯAD7682/AD7689ڦ
+SARႠీă
+უᇸ 
+੗ᅜස཮ 33໯๖ॽᅃ
+ڟREFᆅগǈᅺྺ REFፆ
+ᇀ5 kΩă
+უᇸՂႷԍ
+๑ీ(ഗ੗ᅜ্ᆩ )९՗ 10ăྺ
+฀೏ᅎႠీǈླྀ४๑ᆩ ADR43xईADR44xۉ
+უᇸă 
+უ၌዆ሞ 4.096 V ǈ๑ᆩ5 V ྔև
+უᇸ้ SNRႠీፌॅă SNRࠅ
+๕සူǖ 
+཮32. უᇸ
+཮33. უᇸ
+უᇸඁ᳘!
+๟ྔևएጚᇸǈ AD7682/AD7689
+؜/๼෇REF๑૧
+ۯREFǈREFᇑGNDᆅগኮक़ᆌᆶၳඁ᳘ă
+૶থ
+ڟREFࢅGNDگڦߌۉESR๑ᆩ
+უᇸĂ ADR43x/ADR44xუᇸई
+AD8031ĂAD8605ഗ้ǈ10 μF )X5RĂ1206؅
+ă 
+ᇀ AD7682/AD7689Ⴀ
+ዘᄲǈၘ९ “քਆք၍”ඹᆌᇑ
+ADCڦREFٚPCB ጽ၍૶থă
+GND߲
+ă 
+዁ 2.2 μFႠీ
+)༬՚๟DNLᆖၚटၭă 
+ǈREFᇑGNDඁ
+ඹ)ස100 nF*ă 
+߲ܠAD7682/AD7689ഗॲईഄ໲PulSARᆌ
+ᆶ
+گSARඡă 
+ဣຕ (TC)ǈሞ஢
+ဣຕă૩
+უᇸ ±10 ppm/°Cᅜ
+±1 LSB/°CՎă
+
+ 
+Rev. B | Page 22 of 32 
+AD8605
+AD7689
+VIOREF VDD
+10μF 1μF 0.1μF
+10Ω
+10kΩ
+5V
+5V
+5V
+1μF
+1
+1OPTIONAL REFERENCE BUFFER AND FILTER.
+0.1μF
+07353-035 
+AD7682/AD7689 
+75
+70
+65
+60
+55
+50
+45
+40
+35
+30
+1 10k10
+PSSR (dB)
+100 1k
+FREQUENCY (kHz)
+07353-034 
+཮34. PSRRဣ
+10,000
+1000
+100
+10
+1
+0.1
+0.010
+0.001
+10 1M100
+OPERATING CURRENT (μA)
+1k 10k 100k
+SAMPLING RATE (SPS)
+07353-040
+VDD = 5V, INTERNAL REF
+VDD = 5V, EXTERNAL REF
+VDD = 2.5V, EXTERNAL REF
+VIO
+ 
+཮35. ဣ
+཮36. ୟ๖૩
+ᇸ!
+AD7682/AD7689ᇸ
+(VDD)ᅜतຕጴ๼෇ /ᇸ (VIO)ăVIO੗ᅜᇑ1.8 
+V዁VDDᇸǈ
+VIOࢅVDDᆅগ੗ᅜ૶ሞᅃഐă AD7682/AD7689 ዐVIOࢅ
+VDDྷ
+ǈස཮34໯๖ă 
+AD7682/AD7689ǈ
+ഗ
+ᆌᆩă
+एጚᇸྺADC!ۉࠃ
+ǈ AD7682/AD7689੗
+ǈ཮ 36૩
+ǖ 
+t ᇸă 
+t უᇸǈ૩ස
+ADR43x/ADR44xă 
+t ഗǈස AD8605ᇸ৊
+ႜ୳հǈස཮36໯๖ă 
+
+ 
+Rev. B | Page 23 of 32 
+AD7682/AD7689
+ຕጴথ੨!
+AD7682/AD7689ڦڇ4၍থ੨ǈᇑ SPI Ă
+MICROWIRE™ Ă QSPI™ࢅDSP ग़ඹǈ૩ස
+Blackfin® ADSP-BF53xĂSHARC®ĂADSP-219xࢅADSP-218xă 
+থ੨๑ᆩ CNVĂDINĂSCKࢅSDOڦ࣑
+CNVᄣᆌᆩዐ
+ᆶᆩă 
+߲14ഗCFG[13:0]ᆩᇀದዃADCĂएጚ
+९ “ഗǈ CFG”և
+ă 
+ړCNVൽ /֑
+ă
+CFGጴሞമ14߲SCKሞമ 15ࡕ
+ڼ16*߲SCK๑ీ
+କCFGႴᄲ 14߲SCKࡕ
+ڦ࠲CFGጴǈCFGڦMSBڦࡕLSBă 
+૶Ⴤ SCKࡗCNVೝઠ
+჋ስǈSCKຕ਍ă 
+ຕጴऄ
+)ۯSCKĂCNVĂDINĂSDOิႠీ
+ൽ/ႀ෇้क़
+)tDATAǅኮമǗAD7682/AD7689ୟǈ੗ᅜၯኟ
+ٗtDATAڟtCONV৊
+ᆌሞ tDATAኮമದ
+ዃAD7682/AD7689஬ኸ๖)සႴᄲ*ăSCKईDINሞ
+ǈሞ CNV
+ሀ20 nsࢫ10 ns׼
+૶Ⴤ SCKڦ
+࿚༶ă 
+ൽ/ႀ෇ǈ੺໏ዷऐ 
+࣑n)ൽ/ْn−
+1)ǈႀ෇CFGْn+1)ण
+ă 
+CNVೝǈ
+ൽ /ൽ /পኹ้क़
+ྺtDATAዷऐՂႷ๑ᆩ੺໏ SCK้
+ዓă
+ڦSCKူ๕ऺ໙ǖ 
+tDATAᇑtCONVิຕጴऄ
+ă 
+ൽ/ዷऐ 
+܎n)ൽ /ࡕ
+ْn−1)ْn+1)֑
+णă 
+ൽ/ิሞ
+tACQࢽ
+ǈ
+ă 
+ዷऐ!
+ൽ/ण
+(n)࣑n)ْn−1)
+ǈႀ෇CFGْn+1)ࢅ
+ă 
+ൽ /ൽ /পኹ้क़ྺ
+tDATAൽ/ႀ෇ᆌ
+ิሞtACQ + tDATA้क़ాă 
+ཾུ໏୲ਦ
+ൽ /ႀ෇၎
+ǈ੗
+ă 
+࿚ᄲ൱ॽ CNVೝᅜ
+ǈCNV࿚ăᅺ
+࿚ă 
+ഗǈCFG 
+AD7682/AD7689߲14ഗ) CFG[13:0] ǈၘ
+९՗10੻Ăएጚ
+Ⴞଚഗă CFGࡗ14߲SCKฉืᄂ໮
+ᇀDINฉ)MSBᆫံ*ăCFGǈሎႹ๑ᆩᅴ
+օईཞօዷऐă
+
+ 
+Rev. B | Page 24 of 32 
+13 12 11 10 9 8 7 6 5 4 3 2 1 0 
+CFG INCC INCC INCC INx INx INx BW REF REF REF SEQ SEQ RB 
+՗10. ഗ௮ຎ
+௮ຎ
+[13] CFG 
+  
+  
+[12:10] INCC 
+  ࿋12 ࿋11 ࿋10  ీ
+  0 0 X 1 
+  0 1 0 
+  0 1 1 
+  1 0 X 1 
+  1 1 0 
+  1 1 1 
+[9:7] INx 
+  AD7682 AD7689 
+  ࿋ 9 ࿋ 8 ࿋ 7 ࿋  9
+ԡ 
+࿋  8 ࿋  7ڢ
+X1 0 0 IN0 0 0 0 IN0 
+  X1 0 1 IN1 0 0 1 IN1 
+  X1 1 0 IN2 … … … … 
+  X1 1 1 IN3 1 1 1 IN7 
+[6] BW 
+[5:3] REF 
+  ࿋  5 ࿋  4 ࿋  3 ీ!
+  0 0 0 
+  0 0 1 
+  0 1 0 
+  0 1 1 
+  1 1 0 
+  1 1 1 
+[2:1] SEQ 
+  ࿋ 2 ࿋ 1 ీ!
+  0 0 
+  0 1 
+  1 0 
+  1 1 
+[0] RB 
+  
+  
+1 x = ඪᅪă 
+ 
+AD7682/AD7689 
+ण /٪
+঳ຐ้ǈ tCONV(ኵ)ăႀ
+෇CFG้
+CFGഗăැᄲ
+ᇨेሜCFGยዃǈᆌ๑ DINೝժԍ
+้क़ăኄᄣǈ CFG[13:0] = 0x3FFF้ǈ
+AD7682/AD7689ยዃසူǖ
+t IN[7:0]टႠǈᅜGNDႾଚ 
+t ੻ 
+t უᇸ/ഗ 
+t ๑ీాևႾଚഗ 
+t ܁࣮CFGഗ 
+՗10९“߾
+ፕᇱ૙”ă 
+ႎă 
+0 = ದዃยዃă 
+1 = ాඹă 
+ă!
+ă!
+ǗINx −ᅜVREF/2 ± 0.1 V੊ă 
+ມटႠǗINx −ᅜCOM = VREF/2 ± 0.1 V੊ă 
+ഗă 
+ǗINx −ᅜGND ± 0.1 V੊ă 
+टႠǗINx ᅜCOM = GND ± 0.1 V੊ă 
+टႠǗInxᅜ GND੊ă 
+९“ཚ୳հഗ”ă 
+0 = ¼ཾུ໏୲ᄺՂႷই዁¼ă 
+1 = ੻ă 
+ഗă
+ă
+ႾଚഗăሎႹᅜIN0ڟIN[7:0]९“Ⴞଚഗ”ă 
+܁࣮CFGഗă 
+0 = മದዃă 
+1 = ದዃాඹă 
+უᇸǈREF = 2.5 Vă 
+უᇸǈREF = 4.096 Vă 
+ഗ๑ీă 
+ഗ๑ీă 
+ഗ্ᆩă 
+ഗ্ᆩă 
+্ᆩႾଚഗă 
+ႎದዃă 
+෢௮IN0዁IN[7:0])ᆯCFG[9:7]ă 
+෢௮IN0዁IN[7:0])ᆯCFG[9:7]ยዃ*ă 
+
+ 
+Rev. B | Page 25 of 32 
+ACQUISITION
+(n – 1) UNDEFINED
+ACQUISITION
+(n)
+ACQUISITION
+(n + 1)
+ACQUISITION
+(n + 2)PHASE
+POWER
+UP
+EOCEOC
+SOC
+EOC EOC
+CONVERSION
+(n – 1) UNDEFINED
+CONVERSION
+(n)
+CONVERSION
+(n + 1)
+CONVERSION
+(n – 2) UNDEFINED
+07353-043
+tCONV
+tCYC
+tDATA
+CNV
+CNV
+CNV
+DIN
+SDO
+XXX
+MSB
+XXX
+MSB
+XXX
+NOTES
+1. CNV MUST BE HIGH PRIOR TO THE END OF CONVERSION (EOC) TO AVOID THE BUSY INDICATOR.
+2. A TOTAL OF 16 SCK FALLING EDGES ARE REQUIRED TO RETURN SDO TO HIGH-Z. IF CFG READBACK IS ENABLED, A TOTAL OF 30 SCK FALLING EDGES IS
+    REQUIRED TO RETURN SDO TO HIGH-Z.
+DATA (n)DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 3)
+XXX
+MSB
+(n)
+MSB
+(n + 1)
+DIN
+SDO DATA (n + 1)DATA (n)
+DATA (n) DATA (n) DATA (n + 1)
+DIN CFG (n) CFG (n) CFG (n + 2) CFG (n + 2)CFG (n + 1) CFG (n + 1) CFG (n + 3)
+SDO
+SCK 11 6 1 6 1 6 1 6
+NOTE 2
+NOTE 2
+1 1 1
+SCK 11 6 16 16 nnn n + 1 n + 1 n + 1 n 1 1
+SCK 1 1 11 61616 1
+1
+CFG (n) CFG (n + 1) CFG (n + 2)
+RDC
+RAC
+RSC
+CFG (n) CFG (n + 1) CFG (n + 2) CFG (n + 3)
+NOTE 2
+NOTE 1
+NOTE 1
+NOTE 1
+ 
+AD7682/AD7689
+ཚᆩ้Ⴞ!
+཮37ൽ /ႀ෇
+(RDC)ൽ /ႀ෇ (RAC)ൽ /ႀ෇
+(RSC) ă൩ጀᅪǈ CFG঳ຐ
+(EOC)ࡕCNV஬ኸ๖ഗ
+্ᆩă 
+ڦ“ຕጴথ੨”পኹ้क़ྺҾ
+ൽ/ႀ෇้क़tDATAுᆶሞEOCኮമႀ෇ྜ
+ڦCFGጴǈሶCFGࡕ
+ுᆶሞ EOC฿ǈ
+ADCڦ࣑MSBႎSDO९཮ 40཮
+41ൽ/໯ᆶ้ႾဦবǈԈઔ
+ࢅ׼SCKă
+ړCNV ሞ EOCೝ้ǈ SDOፆༀՎྺ
+MSBăSCKٗ؜MSB − 1࿋ă 
+๑ᆩSPI਍้ዓटႠ (CPOL)้ዓ၎࿋(CPHA)
+փཞǈ SCKڦڇ
+๟ସCPOL = CPHA = 0ǈස཮37໯๖ǈ๑SCK੣ှ
+ೝă 
+ൽ/๟
+ǈᅺྺᆶၳ CFGڼڟ2߲EOC၄ǈᅺ
+Ⴔᄲ2ጒༀ೺क़ႀ
+෇CFG)සRDCႴᄲዘႎႀ෇ CFGस
+܎n−1)ႀ෇CFGᆶ
+၄ሞ(n+1)ă 
+཮37. ڦAD7682/AD7689ཚᆩথ੨้Ⴞ
+
+ 
+Rev. B | Page 26 of 32 
+ACQUISITION
+(n – 1) UNDEFINED
+ACQUISITION
+(n)
+ACQUISITION
+(n + 1)
+ACQUISITION
+(n + 2)PHASE
+POWER
+UP
+EOCEOC
+START OF CONVERSION
+(SOC)
+EOC EOC
+CONVERSION
+(n)
+CONVERSION
+(n + 1)
+CONVERSION
+(n – 2) UNDEFINED
+07353-044
+tCONV
+tCYC
+tDATA
+CNV
+CNV
+CNV
+DIN
+RDC
+RAC
+RSC
+SDO
+NOTES
+1. CNV MUST BE LOW PRIOR TO THE END OF CONVERSION (EOC) TO GENERATE THE BUSY INDICATOR.
+2. A TOTAL OF 17 SCK FALLING EDGES ARE REQUIRED TO RETURN SDO TO HIGH-Z. IF CFG READBACK IS ENABLED,
+    A TOTAL OF 31 SCK FALLING EDGES IS REQUIRED TO RETURN SDO TO HIGH-Z.
+DATA (n)DATA (n – 1)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 3)
+XXX
+DIN
+SDO DATA (n + 1)DATA (n)
+DATA (n) DATA (n) DATA (n + 1)
+DIN CFG (n) CFG (n + 2)CFG (n + 1) CFG (n + 3)
+SDO
+SCK 1 1 1 1
+SCK 1n n  +  1 1 7
+17 17 17 17
+17 17 17
+1n n  +  1 1 7 1 n n  +  1 1 7
+SCK 1 1 1 1
+1
+XXX
+NOTE 1
+NOTE 1
+NOTE 1
+NOTE 2
+NOTE 2
+NOTE 2
+CFG (n) CFG (n + 1) CFG (n + 2)
+CFG (n) CFG (n + 1) CFG (n + 2) CFG (n + 3)
+CONVERSION
+(n – 1) UNDEFINED
+ 
+AD7682/AD7689 
+ཚᆩ้Ⴞ!
+཮38ൽ /ႀ෇
+(RDC)ൽ /ႀ෇ (RAC)ൽ /ႀ෇
+(RSC) ă൩ጀᅪǈ CFG঳ຐ
+(EOC)ຕ਍
+ൽ/ႀ෇้क़ tDATAுᆶሞ EOCڦ
+CFGጴǈሶCFGമದዃධ඗ᆶၳă 
+ࡕCNVُ
+஬ኸ๖ǈዷऐՂႷ዁ณዃ࿋ 17߲SCKူ
+ইᄂ֍ీ๑SDOፆༀǈᅺྺ SDOᅃ࿋ධ඗
+ᆶၳăᇑ “ཚᆩ้Ⴞ ”൧઄փ
+ுᆶሞ EOCࢫ
+ࡽ
+گڟߛ߲
+߲SPIዷऐ๴၌ᇀ8࿋ई16ஞ
+ໃ 16߲SCKُLSB
+ሞăAD7682/AD7689ሯำྺ4 LSBኵ)ई
+ُLSBሞ50%ᇀ SPIথ
+੨ǈSPIዷऐႴᄲ24߲SCKǈईኁ੗ᅜ๑ᆩQSPIথ੨ᅜ
+ײ17߲SCKă 
+๑ᆩ SPI਍ CPOLࢅCPHAփཞǈ SCK੣
+๟ସCPOL = 
+CPHA = 1)཮ዐ࿄၂๖*ǈ๑SCKೝă 
+ൽ/๟
+ǈᅺྺᆶၳ CFGڼڟ2߲EOCܸ
+Ⴔᄲ2ጒༀ೺क़ႀ෇
+CFG)සRDCႴᄲዘႎႀ෇ CFG٪
+܎n−1)ႀ෇CFGᆶၳ
+၄ሞ(n+1)ă
+཮38. ڦAD7682/AD7689ཚᆩথ੨้Ⴞ
+
+ 
+Rev. B | Page 27 of 32 
+ 
+ACQUISITION
+(n – 1) UNDEFINED
+ACQUISITION
+(n), IN0
+ACQUISITION
+(n + 1), IN1
+ACQUISITION
+(n + 2), IN2PHASE
+POWER
+UP
+EOCEOC
+SOC
+EOC EOC
+CONVERSION
+(n – 1) UNDEFINED
+CONVERSION
+(n), IN0
+CONVERSION
+(n + 1), IN1
+CONVERSION
+(n – 2) UNDEFINED
+07353-046
+tCONV
+tCYC
+tDATA
+CNV
+CNV
+CNV
+DIN
+SDO
+XXX
+MSB
+XXX
+MSB
+XXX
+NOTES
+1. CNV MUST BE HIGH PRIOR TO THE END OF CONVERSION (EOC) TO AVOID THE BUSY INDICATOR.
+2. A TOTAL OF 16 SCK FALLING EDGES ARE REQUIRED TO RETURN SDO TO HIGH-Z. IF CFG READBACK IS ENABLED,
+    A TOTAL OF 30 SCK FALLING EDGES IS REQUIRED TO RETURN SDO TO HIGH-Z.
+DATA IN0DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 1)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 2)
+XXX
+DATA (n – 3)
+XXX
+MSB
+IN0
+MSB
+IN1
+DIN
+SDO DATA IN1DATA IN0
+DATA IN0 DATA IN0 DATA IN1
+DIN CFG (n) CFG (n)
+SDO
+SCK 1
+NOTE 1
+16 16 16 16
+NOTE 2
+NOTE 2
+NOTE 22
+1 1 1
+SCK 11 6 16 16 nnn n + 1 n + 1 n + 1 n 1 1
+SCK 1 1 11 61616 1
+1
+CFG (n)
+RDC
+RAC
+RSC
+CFG (n)
+ 
+ 
+AD7682/AD7689
+Ⴞଚഗ!
+AD7682/AD7689෢௮ཚ
+ႚ๕
+ഗă 
+ٗIN0ਸ๔ǈᅜCFG[9:7]ڦIN[7:0]ᇀ
+ൽਦᇀ CFG[9:7]߲
+ኟ๼෇๔
+)ڢIN0ĂIN2ĂIN4ĂIN6๼෇๔ዕྺആຕ
+)ڢIN1ĂIN3ĂIN5ĂIN7ࡕCFG[9:7] = 110 ई
+111้ǈኟ๼෇ྺ IN0ĂIN2ĂIN4
+ࢅIN6ă 
+CFG[2:1] ᆩᇀ๑ీႾଚഗă CFG࿋
+13ຕ਍้ DINሶ CFGْ
+ႎă 
+ፕ้ǈ CFG߀
+߀߸ࡕCFG[11]ई CFG
+[9:7]ǈժሞ
+CFG࣑IN0)ईIN0/IN1ă 
+཮39߸
+९“ཚᆩ้Ⴞ”ࢅݴ“஬ኸ๖
+ൽ /ႀ෇”஬ኸ๖ഗ
+९ “ཚ
+ᆩ้Ⴞ ”ࢅݴ“ ൽ /ႀ෇ ”և
+ă
+ڦࢫۉn−1)ยዃ CFG٪
+܎n)ण IN0ᆶၳ
+܎n+1)ܔCFG[9:7]߲
+ഗຕ਍ (๑ీ)ǈ
+णIN0ă 
+๖૩!
+टႠఇ๕ժᅜ GND੊ǈԈઔా
+ǖ 
+IN0, IN1, IN2, IN3, IN4, IN5, IN6, IN7, TEMP, IN0, IN1, IN2, 
+… 
+ഗǈሶႾଚഗӀᅜ
+ǖ 
+IN0, IN2, IN4, IN6, TEMP, IN0, … 
+൩ጀᅪǈ IN1 ĂIN3 ĂIN5ࢅIN7ई VREF/2֖
+९“๼෇ದዃ”ă 
+཮39. Ⴞଚഗ้Ⴞ
+
+ 
+Rev. B | Page 28 of 32 
+MISO
+MOSI
+SCK
+SSCNV
+FOR SPI USE CPHA = 0, CPOL = 0.
+SCK
+SDO
+DIN
+AD7682/
+AD7689
+DIGITAL HOST
+07353-036 
+UPDATE (n)
+CFG/SDO
+UPDATE (n + 1)
+CFG/SDO
+ACQUISITION (n)
+ACQUISITION
+(n + 1)
+ACQUISITION
+(n - 1)
+MSB MSB – 1
+1 2
+BEGIN DATA (n – 1)
+BEGIN CFG (n + 1)
+CFG
+MSB
+CFG
+MSB – 1
+LSB + 1
+14 15
+SEE NOTE
+SEE NOTE
+NOTES
+1. THE LSB IS FOR CONVERSION RESULTS OR THE CONFIGURATION REGISTER CFG (n – 1) IF
+    15 SCK FALLING EDGES = LSB OF CONVERSION RESULTS.
+    29 SCK FALLING EDGES = LSB OF CONFIGURATION REGISTER.
+    ON THE 16TH OR 30TH SCK FALLING EDGE, SDO IS DRIVEN TO HIGH IMPENDANCE.
+16/
+30
+CONVERSION (n)
+END DATA (n – 1)
+END CFG (n + 1)
+CFG
+LSB X X
+> tCONV
+LSB
+SCK
+CNV
+DIN
+SDO LSB + 1
+14 15 16/
+30
+CONVERSION (n – 1)
+END DATA (n – 2)
+END CFG (n)
+CFG
+LSB X X
+tCONV
+tDATA
+tCNVH
+tDATA
+tDIStDIS
+tENtDSDO
+tHSDO
+tHDINtSDIN
+tCLSCK
+tENtEN
+tSCKtSCKH
+tSCKL
+tDIStDIS
+tCONV
+LSB
+07353-037
+tACQ
+tCYC
+(QUIET
+TIME)
+(QUIET
+TIME)
+EOC EOC
+RETURN CNV HIGH
+FOR NO BUSY
+RETURN CNV HIGH
+FOR NO BUSY
+ 
+AD7682/AD7689 
+ൽ/ႀ෇ 
+ړAD7682/AD7689๑ᆩ SPI੨ई FPGA
+ఇ๕ă૶থ཮ස཮ 40้Ⴞ
+ස཮41ᇀSPIǈዷऐᆌ๑ᆩCPHA = CPOL = 0 ă໯
+ൽ/ႀ෇้ႾԈઔ“ຕጴথ੨”໯
+้क़৊ႜຕ
+९ “ࡤ
+ൽ/ႀ෇”ă 
+CNVǈഽ዆ SDO୼ DIN
+ǈ࿮ஃ CNVۼ࣑
+ྺኹăCNV๼้क़tDATAኮ
+้क़ tCONVኮ
+ኸ๖ă 
+ǈAD7682/AD7689ጒༀă
+ዷऐሞtCONV๑CNVೝ้ǈMSB
+၄ሞSDOໃCFGڦMSB(ස
+ᆶՂᄲ)ႎCFGăሞCNVೝ೺क़ǈCFG
+ิăമ 14߲SCKႎ
+CFG ǈമ 15߲SCKٗMSB−1঳
+ڦ࣑
+tDATA้क़๝ඁኮമăՂႷႀ෇໯ᆶ14࿋CFG[13:0]ሶ
+ுᆶሞ tDATA܁࣮16
+฿ă 
+SDOຕ਍ሞSCKူইᄂ਩ᆶၳă໚඗ฉืᄂ੗
+๑ᆩ SCK߸
+ڼ16߲(ई
+ڼ30߲SCKړCNVೝ้ (ᅜፌ
+ิኁྺጚ)ǈSDOፆༀă 
+๑ీକ CFGڦࡕLSBᅜ MSB
+ڦ࠲CFGഗăኄዖ൧઄
+Ⴔᄲ30߲SCKူইᄂ֍ీ๑SDOፆༀă 
+཮41. ڦAD7682/AD7689ႜথ੨้Ⴞ
+཮40. ڦAD7682/AD7689૶থ཮ 
+
+Rev. B | Page 29 of 32 
+AD7682/
+AD7689
+MISO
+MOSI
+SCK
+SS
+SDO
+VIO
+FOR SPI USE CPHA = 1, CPOL = 1.
+SCK
+CNV
+DIN
+DIGITAL HOST
+IRQ
+07353-038 
+SCK
+ACQUISITION (n) ACQUISITION
+(n + 1)
+CNV
+DIN
+SDO MSB MSB
+– 1
+1 2
+BEGIN DATA (n – 1)
+BEIGN CFG (n + 1)
+CFG
+MSB
+LSB
++ 1 LSB
+1515
+SEE NOTE
+SEE NOTE
+NOTES:
+1. THE LSB IS FOR CONVERSION RESULTS OR THE CONFIGURATION REGISTER CFG (n – 1) IF
+    16 SCK FALLING EDGES = LSB OF CONVERSION RESULTS.
+    30 SCK FALLING EDGES = LSB OF CONFIGURATION REGISTER.
+    ON THE 17TH OR 31st SCK FALLING EDGE, SDO IS DRIVEN TO HIGH IMPENDANCE.
+    OTHERWISE, THE LSB REMAINS ACTIVE UNTIL THE BUSY INDICATOR IS DRIVEN LOW.
+1616 17/
+31
+17/
+31
+CONVERSION (n)CONVERSION
+ (n – 1)
+(QUIET
+TIME)
+END DATA (n – 2) END DATA (n – 1)
+END CFG (n + 1)END CFG (n)
+XXXX X X
+tDATA
+UPDATE (n + 1)
+CFG/SDO
+LSB
++ 1 LSB
+CONVERSION  (n – 1) (QUIET
+TIME)
+UPDATE (n)
+CFG/SDO
+tCYC
+tACQ
+tHDIN
+tHSDO
+tDSDO
+tSDIN
+tDATA
+tCONV
+tCNVH
+tDIS
+tDIS
+tDIS tEN
+tEN tEN
+CFG
+MSB –1
+07353-039
+tSCKtSCKH
+tSCKL
+ 
+AD7682/AD7689
+཮42. ڦAD7682/AD7689૶থ཮
+཮43. ڦAD7682/AD7689ႜথ੨้Ⴞ
+ൽ0ႀ෇!
+ړAD7682/AD7689๑ᆩ SPI੨ई FPGA
+ఇ๕ă૶থ཮ස཮ 42໯
+้Ⴞස཮ 43ᇀSPIǈዷऐᆌ๑ᆩCPHA 
+= CPOL = 1ൽ/ႀ෇้ႾԈઔ“ຕጴথ
+ݴ”໯ᆶෙዖఇ๕ă 
+CNV୼ DINຕ਍ժഽ዆ SDO
+ǈ࿮ஃ CNVࣷۼ࣑
+ྺኹă CNV๼้क़ tDATAኮമՂ
+้क़ tCONVǈᅜ
+ǈ SDOۉگ
+ೝጒༀ (ຕ਍৽Ⴣ )ǈॽSDOڟVIOǈSDO੗ᅜᆩᇀ
+๼ă 
+ǈAD7682/AD7689ጒༀă
+ໃCFGڦMSB(සᆶՂᄲ)ǈᅜՍਸ
+ႎCFGăሞCNVೝ೺क़ǈ CFG܁࣮
+ิăമ 14߲SCKႎ CFGഗǈമ 16
+߲SCKٗMSBൽ
+ڦ࣑tDATA ้क़๝ඁኮ
+മăՂႷႀ෇໯ᆶ14࿋CFG[13:0]ُ
+ுᆶሞ tDATA܁࣮16঳
+฿ă 
+SDOຕ਍ሞSCKူইᄂ਩ᆶၳă໚඗ฉืᄂ੗
+๑ᆩ SCK߸
+ڼڦ
+17߲(ڼ31߲SCKǈ SDOፆༀă൩ጀ
+ڦSCK஬༬
+Ⴀǈၘ९“ཚᆩ้Ⴞ”ă 
+๑ీକ CFGڦࡕLSBᅜ MSB
+ڦ࠲CFGഗăኄዖ൧઄
+Ⴔᄲ31߲SCKူইᄂ֍ీ๑SDOፆༀă
+
+ 
+Rev. B | Page 30 of 32 
+AD7682/AD7689 
+ᆌᆩႷኪ!
+քਆք၍!
+AD7682/AD7689ୟӱ (PCB)ݴ
+൶ᇘాă
+AD7682/AD7689ࡽ
+ยऺă 
+዁ႊೌ
+ሞAD7682/AD7689ᆩፕೡԸă
+ዮසCNVୟ
+ඡă 
+ߪݴ
+ᆌሞ AD7682/ 
+AD7689૶থă 
+AD7682/AD7689უ๼෇ REFༀ๼෇ፆੇǈ
+უ
+*ܔREFࢅGNDᆅগ
+ፆੇጽ၍৊ႜ૶থă
+ǈAD7682/AD7689ᇸVDDࢅVIOඹ
+ྺ100 nF ǈ੍ৎAD7682/AD7689ዃǈժ
+ᇸ၍ୟ
+ሯำᆖၚă 
+AD7682/AD7689ࠚ 
+AD7682/AD7689ӱ(EVAL-AD7682EDZ/ EVAL-AD7689
+EDZ)ӱ༫ॲԈ
+ٗPCࡗ
+णӱ EVAL-CED1Zڦ
+෉ॲă
+
+ 
+Rev. B | Page 31 of 32 
+٫؅
+ 
+2.65
+2.50 SQ
+2.35
+3.75
+BSC SQ
+4.00
+BSC SQ
+COMPLIANT TOJEDEC STANDARDS MO-220-VGGD-1
+090408-B
+1
+0.50
+BSC
+PIN 1
+INDICATOR
+0.50
+0.40
+0.30
+TOP VIEW
+12° MAX 0.80 MAX
+0.65 TYP
+SEATING
+PLANE
+PIN 1
+INDICATOR
+COPLANARITY
+0.08
+1.00
+0.85
+0.80
+0.30
+0.23
+0.18
+0.05 MAX
+0.02 NOM
+0.20 REF
+20
+6
+16
+10
+11
+15
+5
+EXPOSED
+PAD
+(BOTTOM VIEW)
+0.60 MAX
+0.60 MAX
+0.25 MIN
+FOR PROPER CONNECTION OF
+THE EXPOSED PAD, REFER TO
+THE PIN CONFIGURATION AND
+FUNCTION DESCRIPTIONS
+SECTION OF THIS DATA SHEET.
+ 
+ኸళ!
+ࡽ ၍Ⴀ(INL) ຕଉ  
+AD7682BCPZ1
+ 16 ࿋ −40°C ዁ +85°C  CP-20-4 
+AD7682BCPZRL71
+ 16 ࿋ −40°C ዁ +85°C  CP-20-4 
+AD7689ACPZ1
+ 15 ࿋ −40°C ዁ +85°C  CP-20-4 
+AD7689ACPZRL71
+ 15 ࿋ −40°C ዁ +85°C  CP-20-4 
+AD7689BCPZ1
+ 16 ࿋ −40°C ዁ +85°C  CP-20-4 
+AD7689BCPZRL71
+ 16 ࿋ −40°C ዁ +85°C  CP-20-4 
+EVAL-AD7682EDZ1
+      
+EVAL-AD7689EDZ1
+      
+EVAL-CED1Z2
+      
+ 
+ 
+཮44. 20ᆅগLFCSP_VQጎǈ
+4 mm x 4 mmԋ༹
+(CP-20-4)࿋ǖmm 
+ኵ±2 LSB 
+ኵ±2 LSB 
+20ᆅগQFN (LFCSP_VQ) 
+20ᆅগQFN (LFCSP_VQ) 
+ਝಎǈ490 
+ǈ1,500
+ਝಎǈ490 
+ǈ1,500
+ਝಎǈ490 
+ǈ1,500
+20ᆅগQFN (LFCSP_VQ) 
+20ᆅগQFN (LFCSP_VQ) 
+20ᆅগQFN (LFCSP_VQ) 
+20ᆅগQFN (LFCSP_VQ) 
+ӱ 
+ӱ 
+ӱ 
+ኵ±6 LSB 
+ኵ±6 LSB
+ኵ±2 LSB 
+ኵ±2 LSB 
+1 ࢇޙRoHSग़ඹഗॲă 
+2 ੦዆ഗӱሎႹPCټEDڦADIӱ৊ႜ੦዆ժᇑኮཚ႑ă 
+AD7682/AD7689
+
+ 
+Rev. B | Page 32 of 32 
+ጀ๥!
+ 
+ 
+©2008–2009 Analog Devices, Inc. All rights reserved. Trademarks and  
+ registered trademarks are the property of their respective owners. 
+  D07353-0-6/09(B)  
+AD7682/AD7689 

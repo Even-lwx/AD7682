@@ -40,6 +40,17 @@ code/MDK-ARM/*.uvoptx
 # Temporary analysis/export artifacts
 tmp_*.pdf
 tmp_*.txt
+tmp/
+output/
+assets/
+*.bin
+*.csv
+*.html
+*.exe
+*.pkg
+*.zip
+analysis_output*/
+**/log/
 
 # Local measurement workbooks
 LP5907_3-2V电压变化.xlsx
