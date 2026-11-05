@@ -5,18 +5,40 @@
 #define REG_CONTROL1 0x00U
 #define REG_SECONDS  0x02U
 
+/**
+ * @brief 将已屏蔽控制位的 BCD 数字解码为十进制整数。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 解码或转换后的整数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t PCF8563_BcdToInt(uint8_t value)
 {
     /* 将 RTC 寄存器中的 BCD 数字转换为普通十进制数。 */
     return (uint8_t)(((value >> 4U) * 10U) + (value & 0x0FU));
 }
 
+/**
+ * @brief 将十进制整数编码为 RTC 寄存器使用的 BCD 数字。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 解码或转换后的整数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t PCF8563_IntToBcd(uint8_t value)
 {
     /* 将普通十进制数转换为 PCF8563 使用的 BCD 格式。 */
     return (uint8_t)(((value / 10U) << 4U) | (value % 10U));
 }
 
+/**
+ * @brief 从 RTC 指定起始寄存器连续读取字节。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param reg 起始寄存器地址。
+ * @param data 待处理字节或数据区；指针的输入输出方向由 const 和函数用途确定。
+ * @param length 连续处理的字节数，数组尺寸须与该长度匹配。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef PCF8563_ReadRegisters(SoftI2C_HandleTypeDef *handle,
                                                 uint8_t reg, uint8_t *data,
                                                 uint16_t length, uint32_t timeout)
@@ -25,6 +47,16 @@ static HAL_StatusTypeDef PCF8563_ReadRegisters(SoftI2C_HandleTypeDef *handle,
     return SoftI2C_MemRead(handle, PCF8563_I2C_ADDR, reg, data, length, timeout);
 }
 
+/**
+ * @brief 向 RTC 指定起始寄存器连续写入字节。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param reg 起始寄存器地址。
+ * @param data 待处理字节或数据区；指针的输入输出方向由 const 和函数用途确定。
+ * @param length 连续处理的字节数，数组尺寸须与该长度匹配。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef PCF8563_WriteRegisters(SoftI2C_HandleTypeDef *handle,
                                                  uint8_t reg, uint8_t *data,
                                                  uint16_t length, uint32_t timeout)
@@ -33,6 +65,14 @@ static HAL_StatusTypeDef PCF8563_WriteRegisters(SoftI2C_HandleTypeDef *handle,
     return SoftI2C_MemWrite(handle, PCF8563_I2C_ADDR, reg, data, length, timeout);
 }
 
+/**
+ * @brief 读取 RTC 日期时间，屏蔽控制位并将 BCD 字段转为整数。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param datetime RTC 日期时间结构；const 为输入，其他指针用于读取输出。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef PCF8563_ReadDateTime(SoftI2C_HandleTypeDef *handle,
                                        PCF8563_DateTime *datetime,
                                        uint32_t timeout)
@@ -62,6 +102,14 @@ HAL_StatusTypeDef PCF8563_ReadDateTime(SoftI2C_HandleTypeDef *handle,
     return HAL_OK;
 }
 
+/**
+ * @brief 校验时间字段范围，将日期时间及世纪位编码后写入 RTC。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param datetime RTC 日期时间结构；const 为输入，其他指针用于读取输出。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef PCF8563_WriteDateTime(SoftI2C_HandleTypeDef *handle,
                                         const PCF8563_DateTime *datetime,
                                         uint32_t timeout)
@@ -89,6 +137,14 @@ HAL_StatusTypeDef PCF8563_WriteDateTime(SoftI2C_HandleTypeDef *handle,
     return PCF8563_WriteRegisters(handle, REG_SECONDS, data, 7U, timeout);
 }
 
+/**
+ * @brief 读改写控制寄存器 STOP 位，启动或停止 RTC 计时。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param running 非 0 启动 RTC，0 停止。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef PCF8563_SetRunning(SoftI2C_HandleTypeDef *handle,
                                       uint8_t running, uint32_t timeout)
 {
@@ -112,6 +168,14 @@ HAL_StatusTypeDef PCF8563_SetRunning(SoftI2C_HandleTypeDef *handle,
     return PCF8563_WriteRegisters(handle, REG_CONTROL1, &control, 1U, timeout);
 }
 
+/**
+ * @brief 读取 RTC 秒寄存器 VL 标志，供上电和校时有效性检查。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param voltage_low VL 标志输出指针；允许 NULL，此时仅读取不写回。
+ * @param timeout 保留的超时参数，单位 ms；当前软件 I2C 位操作不使用该值计时。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef PCF8563_GetVoltageLow(SoftI2C_HandleTypeDef *handle,
                                          uint8_t *voltage_low,
                                          uint32_t timeout)

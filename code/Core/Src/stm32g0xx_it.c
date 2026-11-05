@@ -67,6 +67,10 @@ extern UART_HandleTypeDef huart1;
 /**
   * @brief 处理不可屏蔽中断。
   */
+/**
+ * @brief 处理不可屏蔽异常，当前实现停留在异常循环等待调试。
+ * @return 无返回值。
+ */
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
@@ -82,6 +86,10 @@ void NMI_Handler(void)
 /**
   * @brief 处理硬件错误中断。
   */
+/**
+ * @brief 处理处理器硬件错误，停留在异常循环保留故障现场。
+ * @return 无返回值。
+ */
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
@@ -97,6 +105,10 @@ void HardFault_Handler(void)
 /**
   * @brief 处理通过 SWI 指令触发的系统服务调用。
   */
+/**
+ * @brief 系统服务调用异常入口，当前工程未添加业务处理。
+ * @return 无返回值。
+ */
 void SVC_Handler(void)
 {
   /* USER CODE BEGIN SVC_IRQn 0 */
@@ -110,6 +122,10 @@ void SVC_Handler(void)
 /**
   * @brief 处理可挂起的系统服务请求。
   */
+/**
+ * @brief 可挂起系统服务异常入口，当前工程未添加业务处理。
+ * @return 无返回值。
+ */
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
@@ -123,6 +139,10 @@ void PendSV_Handler(void)
 /**
   * @brief 处理系统滴答定时器中断。
   */
+/**
+ * @brief 维护 HAL 毫秒计数，为超时和主循环调度提供时间基准。
+ * @return 无返回值。
+ */
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
@@ -141,12 +161,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN USART1_IRQn 0 */
+/**
+ * @brief 转交 HAL 处理 USART1 中断，触发串口错误等 HAL 回调。
+ * @return 无返回值。
+ */
 void USART1_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart1);
 }
 
 extern DMA_HandleTypeDef hdma_usart1_rx;
+/**
+ * @brief 转交 HAL 处理 USART1 RX DMA 通道中断。
+ * @return 无返回值。
+ */
 void DMA1_Channel1_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(&hdma_usart1_rx);
@@ -162,6 +190,10 @@ extern volatile uint8_t g_sensor_sample_request;
 extern volatile uint8_t g_adc_normal_enabled;
 void Application_AdcSample100Hz(void);
 
+/**
+ * @brief 清除 TIM3 更新标志，在正常采样启用时执行 100 Hz ADC 采样。
+ * @return 无返回值。
+ */
 void TIM3_IRQHandler(void)
 {
   if ((TIM3->SR & TIM_SR_UIF) != 0U)
@@ -174,6 +206,10 @@ void TIM3_IRQHandler(void)
   }
 }
 
+/**
+ * @brief 维护毫秒节拍、扫描按键并设置慢速采样请求；不在此读传感器或写 Flash。
+ * @return 无返回值。
+ */
 void TIM14_IRQHandler(void)
 {
   if ((TIM14->SR & TIM_SR_UIF) != 0U)

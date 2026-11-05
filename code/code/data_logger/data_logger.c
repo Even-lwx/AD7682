@@ -44,6 +44,13 @@ static uint32_t g_logger_config_sequence;
  * 无效的温湿度/压力分别使用 0x8000、0xFFFF、0x8000 表示。
  * 记录长度为 32 字节，可整除 4 KB 扇区，避免记录跨扇区。 */
 
+/**
+ * @brief 计算 Flash 记录及配置使用的 CRC16/MODBUS，初值 FFFF、多项式 A001。
+ * @param data 待处理字节或数据区；指针的输入输出方向由 const 和函数用途确定。
+ * @param length 连续处理的字节数，数组尺寸须与该长度匹配。
+ * @return 输入数据对应的校验值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint16_t Logger_Crc16(const uint8_t *data, uint32_t length)
 {
     uint16_t crc = 0xFFFFU;
@@ -62,12 +69,26 @@ static uint16_t Logger_Crc16(const uint8_t *data, uint32_t length)
     return crc;
 }
 
+/**
+ * @brief 将 16 位整数按小端序写入字节缓冲区。
+ * @param p 小端字节缓冲区，须提供足够的 2 或 4 字节空间。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Logger_Put16(uint8_t *p, uint16_t value)
 {
     p[0] = (uint8_t)value;
     p[1] = (uint8_t)(value >> 8U);
 }
 
+/**
+ * @brief 将 32 位整数按小端序写入字节缓冲区。
+ * @param p 小端字节缓冲区，须提供足够的 2 或 4 字节空间。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Logger_Put32(uint8_t *p, uint32_t value)
 {
     p[0] = (uint8_t)value;
@@ -76,17 +97,35 @@ static void Logger_Put32(uint8_t *p, uint32_t value)
     p[3] = (uint8_t)(value >> 24U);
 }
 
+/**
+ * @brief 从字节缓冲区按小端序解码 16 位整数。
+ * @param p 小端字节缓冲区，须提供足够的 2 或 4 字节空间。
+ * @return 解码或转换后的整数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint16_t Logger_Get16(const uint8_t *p)
 {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8U);
 }
 
+/**
+ * @brief 从字节缓冲区按小端序解码 32 位整数。
+ * @param p 小端字节缓冲区，须提供足够的 2 或 4 字节空间。
+ * @return 解码或转换后的整数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint32_t Logger_Get32(const uint8_t *p)
 {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) |
            ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
 }
 
+/**
+ * @brief 将摄氏温度编码为 0.01 °C 整数，越界或无效值编码为 -32768。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 0.01 °C 定点值或 -32768 无效哨兵。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static int16_t Logger_EncodeTemperature(float value)
 {
     if (!(value >= -327.67f && value <= 327.67f))
@@ -96,6 +135,12 @@ static int16_t Logger_EncodeTemperature(float value)
     return (int16_t)(value * 100.0f);
 }
 
+/**
+ * @brief 将相对湿度编码为 0.01 %RH 整数，无效值编码为 FFFF。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 0.01 %RH 定点值或 FFFF 无效哨兵。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint16_t Logger_EncodeHumidity(float value)
 {
     if (!(value >= 0.0f && value <= 655.34f))
@@ -105,6 +150,12 @@ static uint16_t Logger_EncodeHumidity(float value)
     return (uint16_t)(value * 100.0f);
 }
 
+/**
+ * @brief 将压力编码为 0.1 hPa 有符号整数，无效值编码为 -32768。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 0.1 hPa 定点值或 -32768 无效哨兵。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static int16_t Logger_EncodePressure(float value)
 {
     if (!(value >= -3276.7f && value <= 3276.6f))
@@ -114,6 +165,12 @@ static int16_t Logger_EncodePressure(float value)
     return (int16_t)(value * 10.0f);
 }
 
+/**
+ * @brief 校验内部 Flash 配置记录的魔数、版本及 CRC16。
+ * @param config 一条固定长度的内部 Flash 配置记录。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Logger_ConfigValid(const uint8_t config[LOGGER_CONFIG_SIZE])
 {
     return (uint8_t)(Logger_Get16(&config[0]) == LOGGER_CONFIG_MAGIC &&
@@ -121,6 +178,12 @@ static uint8_t Logger_ConfigValid(const uint8_t config[LOGGER_CONFIG_SIZE])
                      Logger_Get16(&config[30]) == Logger_Crc16(config, 30U));
 }
 
+/**
+ * @brief 判断配置槽是否全部为 FF，即尚未编程。
+ * @param config 一条固定长度的内部 Flash 配置记录。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Logger_ConfigErased(const uint8_t config[LOGGER_CONFIG_SIZE])
 {
     uint32_t i;
@@ -131,6 +194,11 @@ static uint8_t Logger_ConfigErased(const uint8_t config[LOGGER_CONFIG_SIZE])
     return 1U;
 }
 
+/**
+ * @brief 扫描内部 Flash 配置槽，恢复最新有效配置；无有效记录时保持默认值。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Logger_LoadConfig(void)
 {
     const uint8_t *config;
@@ -194,6 +262,11 @@ static uint8_t Logger_LoadConfig(void)
     return found;
 }
 
+/**
+ * @brief 追加保存带 CRC 的内部 Flash 配置，配置页满时擦除后重新写入。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef Logger_SaveConfig(void)
 {
     uint8_t config[LOGGER_CONFIG_SIZE];
@@ -262,6 +335,13 @@ static HAL_StatusTypeDef Logger_SaveConfig(void)
 /* V4 保持 32 字节记录，ADC 整数码保存在字节 22～29。原先的 28 位
  * 小数字段改为保存 12 位电池电压（精度 0.01 V，上限 40.95 V）
  * 以及四组 4 位 ADC 十分位；仍可解码 V2/V3 记录。 */
+/**
+ * @brief 将版本专用的打包位域写入日志记录的分散存储字段。
+ * @param r 接收或提供打包字段的日志字节缓冲区。
+ * @param packed 版本专用的打包位域整数。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Logger_PutPackedData(uint8_t *r, uint32_t packed)
 {
     r[3] = (uint8_t)packed;
@@ -273,6 +353,12 @@ static void Logger_PutPackedData(uint8_t *r, uint32_t packed)
     r[13] = (uint8_t)((r[13] & 63U) | (((packed >> 26U) & 3U) << 6U));
 }
 
+/**
+ * @brief 从日志记录的分散字段还原版本专用打包位域。
+ * @param r 接收或提供打包字段的日志字节缓冲区。
+ * @return 解码或转换后的整数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint32_t Logger_GetPackedData(const uint8_t *r)
 {
     return (uint32_t)r[3] | ((uint32_t)(r[2] >> 2U) << 8U) |
@@ -283,6 +369,14 @@ static uint32_t Logger_GetPackedData(const uint8_t *r)
            ((uint32_t)(r[13] >> 6U) << 26U);
 }
 
+/**
+ * @brief 把传感器快照编码为固定 32 字节日志，写入版本、序号及 CRC16。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @param sequence 日志或链路的绝对序号。
+ * @param record 固定 32 字节 Flash 日志记录。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Logger_EncodeSample(const DataLogger_Sample *sample,
                                 uint32_t sequence, uint8_t record[LOGGER_RECORD_SIZE])
 {
@@ -330,6 +424,13 @@ static void Logger_EncodeSample(const DataLogger_Sample *sample,
     Logger_Put16(&record[30], Logger_Crc16(record, 30U));
 }
 
+/**
+ * @brief 校验日志魔数、版本和 CRC16，兼容旧格式并解码采样字段。
+ * @param record 固定 32 字节 Flash 日志记录。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef Logger_DecodeSample(const uint8_t record[LOGGER_RECORD_SIZE],
                                              DataLogger_Sample *sample)
 {
@@ -387,6 +488,12 @@ static HAL_StatusTypeDef Logger_DecodeSample(const uint8_t record[LOGGER_RECORD_
     return HAL_OK;
 }
 
+/**
+ * @brief 向外部 Flash 元数据槽追加环形日志状态，槽满时擦除元数据扇区。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef Logger_WriteMetadata(uint32_t timeout)
 {
     uint8_t meta[LOGGER_META_SIZE];
@@ -418,6 +525,13 @@ static HAL_StatusTypeDef Logger_WriteMetadata(uint32_t timeout)
     return HAL_OK;
 }
 
+/**
+ * @brief 绑定 Flash SPI，恢复元数据和配置，扫描有效记录以重建环形日志状态。
+ * @param spi SPI 外设句柄，须已完成初始化。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout)
 {
     uint8_t meta[LOGGER_META_SIZE];
@@ -493,6 +607,13 @@ HAL_StatusTypeDef DataLogger_Init(SPI_HandleTypeDef *spi, uint32_t timeout)
     return HAL_OK;
 }
 
+/**
+ * @brief 编码并追加一条日志，按扇区擦除策略更新环形写指针和元数据。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_Append(const DataLogger_Sample *sample,
                                     uint32_t timeout)
 {
@@ -524,6 +645,14 @@ HAL_StatusTypeDef DataLogger_Append(const DataLogger_Sample *sample,
     return Logger_WriteMetadata(timeout);
 }
 
+/**
+ * @brief 按当前导出顺序读取相对序号对应的记录，并校验记录 CRC。
+ * @param ordinal 从 0 开始的相对读取位置，顺序由导出设置决定。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_Read(uint32_t ordinal,
                                   DataLogger_Sample *sample,
                                   uint32_t timeout)
@@ -546,6 +675,12 @@ HAL_StatusTypeDef DataLogger_Read(uint32_t ordinal,
     return Logger_DecodeSample(record, sample);
 }
 
+/**
+ * @brief 清空日志元数据及运行时索引，保留内部 Flash 的设备配置。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout)
 {
     if (g_logger_spi == NULL ||
@@ -561,6 +696,13 @@ HAL_StatusTypeDef DataLogger_Clear(uint32_t timeout)
     return HAL_OK;
 }
 
+/**
+ * @brief 校验并持久化记录间隔；合法值为 500～86400000 ms 且为 500 的倍数。
+ * @param milliseconds 记录间隔，单位 ms。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_SetIntervalMs(uint32_t milliseconds, uint32_t timeout)
 {
     uint32_t previous;
@@ -582,6 +724,13 @@ HAL_StatusTypeDef DataLogger_SetIntervalMs(uint32_t milliseconds, uint32_t timeo
     return status;
 }
 
+/**
+ * @brief 设置并保存历史读取顺序，保存失败时恢复原设置。
+ * @param newest_first 0 从旧到新，非 0 从新到旧。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
                                                 uint32_t timeout)
 {
@@ -603,11 +752,22 @@ HAL_StatusTypeDef DataLogger_SetDumpNewestFirst(uint8_t newest_first,
     return status;
 }
 
+/**
+ * @brief 读取当前环形日志的有效记录数量。
+ * @return 当前有效记录数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint32_t DataLogger_Count(void)
 {
     return g_logger_count;
 }
 
+/**
+ * @brief 设置并持久化记录开关，保存失败时恢复原值。
+ * @param enabled 功能开关或模式编码，具体取值见函数用途。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_SetRecordingEnabled(uint8_t enabled)
 {
     uint8_t previous = g_logger_recording_enabled;
@@ -620,21 +780,45 @@ HAL_StatusTypeDef DataLogger_SetRecordingEnabled(uint8_t enabled)
     return status;
 }
 
+/**
+ * @brief 读取当前记录开关。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint8_t DataLogger_GetRecordingEnabled(void)
 {
     return g_logger_recording_enabled;
 }
 
+/**
+ * @brief 读取配置中保存的电池校准增益。
+ * @return 电池校准增益。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 float DataLogger_GetBatteryGain(void)
 {
     return (float)g_battery_gain_ppm / 1000000.0f;
 }
 
+/**
+ * @brief 读取是否仅显示 ADC 的菜单配置。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint8_t DataLogger_GetDisplayAdcOnly(void)
 {
     return g_display_adc_only;
 }
 
+/**
+ * @brief 统一校验并保存显示模式、记录开关、导出顺序和间隔；失败回滚运行时配置。
+ * @param adc_only 0 显示全部，1 仅显示 ADC。
+ * @param recording 记录开关，0 关闭、1 开启。
+ * @param newest_first 0 从旧到新，非 0 从新到旧。
+ * @param interval 记录间隔，单位 ms，按 500 ms 步进。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_SetMenuConfig(uint8_t adc_only, uint8_t recording,
                                          uint8_t newest_first, uint32_t interval)
 {
@@ -663,6 +847,12 @@ HAL_StatusTypeDef DataLogger_SetMenuConfig(uint8_t adc_only, uint8_t recording,
     return status;
 }
 
+/**
+ * @brief 保存 0.5～1.5 范围的电池单点增益；失败时恢复旧值。
+ * @param gain 电池单点校准增益，允许 0.5～1.5。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_SetBatteryGain(float gain)
 {
     uint32_t previous = g_battery_gain_ppm;
@@ -675,11 +865,24 @@ HAL_StatusTypeDef DataLogger_SetBatteryGain(float gain)
     return status;
 }
 
+/**
+ * @brief 读取最近一条日志的绝对序号，用于建立导出快照。
+ * @return 最近记录的绝对序号。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint32_t DataLogger_LastSequence(void)
 {
     return g_logger_sequence;
 }
 
+/**
+ * @brief 按绝对序号读取日志，核对存储序号及 CRC，拒绝已被覆盖的记录。
+ * @param sequence 日志或链路的绝对序号。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef DataLogger_ReadSequence(uint32_t sequence,
                                          DataLogger_Sample *sample,
                                          uint32_t timeout)
@@ -701,16 +904,31 @@ HAL_StatusTypeDef DataLogger_ReadSequence(uint32_t sequence,
     return Logger_DecodeSample(record, sample);
 }
 
+/**
+ * @brief 返回外部 Flash 数据区可容纳的最大记录条数。
+ * @return 可容纳的最大记录条数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint32_t DataLogger_Capacity(void)
 {
     return LOGGER_MAX_RECORDS;
 }
 
+/**
+ * @brief 读取当前记录间隔，单位毫秒。
+ * @return 记录间隔，单位 ms。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint32_t DataLogger_GetIntervalMs(void)
 {
     return g_logger_interval;
 }
 
+/**
+ * @brief 读取当前导出顺序配置。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint8_t DataLogger_GetDumpNewestFirst(void)
 {
     return g_logger_dump_newest_first;

@@ -58,7 +58,15 @@ extern "C" {
 /* USER CODE END EM */
 
 /* 对外提供的函数声明。 */
+/**
+ * @brief 关闭中断并停留在错误循环，供无法继续运行的初始化失败调用。
+ * @return 无返回值。
+ */
 void Error_Handler(void);
+/**
+ * @brief 在 TIM14 毫秒中断中扫描按键、消抖并登记事件，不访问总线或打印。
+ * @return 无返回值。
+ */
 void Application_KeyScan1ms(void);
 
 /* USER CODE BEGIN EFP */

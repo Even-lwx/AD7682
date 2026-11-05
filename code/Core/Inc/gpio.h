@@ -34,6 +34,10 @@ extern "C" {
 
 /* USER CODE END Private defines */
 
+/**
+ * @brief 初始化 GPIO 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_GPIO_Init(void);
 
 /* USER CODE BEGIN Prototypes */

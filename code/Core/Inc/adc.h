@@ -36,6 +36,10 @@ extern ADC_HandleTypeDef hadc1;
 
 /* USER CODE END Private defines */
 
+/**
+ * @brief 初始化 ADC1 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_ADC1_Init(void);
 
 /* USER CODE BEGIN Prototypes */

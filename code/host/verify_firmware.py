@@ -10,6 +10,7 @@ from elftools.elf.elffile import ELFFile
 from unicorn import Uc, UC_ARCH_ARM, UC_MODE_THUMB, UC_MODE_MCLASS
 from unicorn.arm_const import UC_ARM_REG_SP, UC_ARM_REG_LR, UC_ARM_REG_R0
 from protocol import data_frame, control_frame
+import zlib
 
 root = Path(__file__).resolve().parents[2]
 out = root / "tmp" / "crc_firmware_test"
@@ -31,6 +32,12 @@ uint32_t HAL_GetTick(void);
 (out / "usart.h").write_text('#include "stm32g0xx_hal.h"\n')
 
 def c_literal(data):
+    """将输入字节逐个转为 C 字符串中的十六进制转义。
+
+    参数：
+    data：待发送字节串。
+
+    返回：提取或格式化后的文本。"""
     return '"' + ''.join(f"\\x{b:02x}" for b in data) + '"'
 
 prefix = r'''
@@ -46,12 +53,13 @@ HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h,uint8_t *p,uint16_t n,
 }
 uint32_t HAL_GetTick(void){return ticks;}
 '''
-module = (root / "code/code/uart_crc/uart_crc.c").read_text()
+module = (root / "code/code/uart_crc/uart_crc.c").read_text(encoding="utf-8-sig")
 tests = r'''
 #define CHECK(c) do{if(!(c))return __LINE__;}while(0)
 int test_main(void){
  uint32_t hex;
  CHECK(Link_Crc16("123456789",9)==0x4B37);
+ CHECK((Link_Crc32Update(0xFFFFFFFFUL,"123456789",9)^0xFFFFFFFFUL)==0xCBF43926UL);
  CHECK(UartCrc_ParseHex8("1234abcd",&hex)&&hex==0x1234ABCD);
  CHECK(!UartCrc_ParseHex8("short",&hex));
  CHECK(!UartCrc_ParseHex8("1234abcx",&hex));
@@ -81,6 +89,41 @@ int test_main(void){
  UartCrc_HandleControl(WRAP_ACK);CHECK(g_sequence==0&&!UartCrc_IsBusy());
  UartCrc_Enable(1);memset(sent,'X',300);sent[300]=0;
  CHECK(UartCrc_Send(sent)==HAL_ERROR&&UartCrc_IsFailed());
+ UartCrc_Enable(0x1234);UartCrc_SetWindow(1);tx_count=0;
+ UartCrc_WindowBegin();CHECK(!UartCrc_IsBusy()&&g_sequence==2&&UartCrc_WindowOpen());
+ CHECK(UartCrc_Send("samples: 1,2")==HAL_OK&&!UartCrc_IsBusy());
+ UartCrc_WindowEnd();CHECK(UartCrc_IsBusy()&&g_sequence==3&&tx_count==3);
+ UartCrc_HandleControl(ACK1);CHECK(UartCrc_IsBusy()); /* Wrong terminal ACK ignored. */
+ UartCrc_HandleControl(NACK3);CHECK(!UartCrc_IsBusy()&&g_sequence==1);
+ CHECK(UartCrc_TakeReplay()&&!UartCrc_TakeReplay());
+ UartCrc_WindowBegin();UartCrc_Send("samples: 1,2");UartCrc_WindowEnd();
+ CHECK(g_retried&&g_sequence==3&&UartCrc_IsBusy());
+ UartCrc_HandleControl(ACK3);CHECK(!UartCrc_IsBusy()&&g_sequence==4);
+ UartCrc_WindowBegin();UartCrc_Send("samples: 3,4");UartCrc_WindowEnd();
+ CHECK(!g_retried&&g_sequence==6);
+ ticks+=500;UartCrc_Process();CHECK(UartCrc_TakeReplay()&&g_sequence==4);
+ UartCrc_WindowBegin();UartCrc_Send("samples: 3,4");UartCrc_WindowEnd();
+ ticks+=500;UartCrc_Process();CHECK(UartCrc_IsFailed());
+ UartCrc_Enable(0x1234);UartCrc_SetWindow(1);UartCrc_WindowBegin();
+ UartCrc_Send("samples: 1,2");UartCrc_WindowEnd();
+ UartCrc_HandleControl(NACK3);CHECK(UartCrc_TakeReplay());
+ UartCrc_WindowBegin();UartCrc_Send("samples: 1,2");UartCrc_WindowEnd();
+ UartCrc_HandleControl(NACK3);CHECK(UartCrc_IsFailed());
+ UartCrc_Enable(0x1234);UartCrc_SetWindow(2);UartCrc_WindowBegin();
+ CHECK(UartCrc_WindowSize()==100&&g_sequence==2);
+ UartCrc_Send("samples: 1,2\r\n");CHECK(!strcmp(sent,"samples: 1,2\r\n")&&g_sequence==2);
+ UartCrc_Send("samples: 3,4");UartCrc_WindowEnd();
+ CHECK(!strcmp(sent,BATCH_END)&&g_sequence==2&&g_batch_rows==2&&UartCrc_IsBusy());
+ UartCrc_HandleControl(NACK2);CHECK(UartCrc_TakeReplay()&&g_sequence==1);
+ UartCrc_WindowBegin();UartCrc_Send("samples: 1,2");UartCrc_Send("samples: 3,4");UartCrc_WindowEnd();
+ CHECK(!strcmp(sent,BATCH_END)&&g_retried);
+ UartCrc_HandleControl(ACK2);CHECK(!UartCrc_IsBusy()&&g_sequence==3);
+ UartCrc_SetWindow(3);CHECK(UartCrc_WindowSize()==1000);
+ { unsigned j;UartCrc_WindowBegin();
+   for(j=0;j<1000;j++)CHECK(UartCrc_Send("samples: 1,2")==HAL_OK);
+   CHECK(g_batch_rows==1000&&g_sequence==4&&!UartCrc_IsBusy());
+   UartCrc_WindowEnd();CHECK(UartCrc_IsBusy()&&strstr(sent,"count=1000")!=0);
+ }
  return 0;
 }
 '''
@@ -91,6 +134,11 @@ macros = {
     "STALE_ACK": control_frame("A", 99, 1).strip(),
     "NACK1": control_frame("N", 0x1234, 1).strip(),
     "WRAP_ACK": control_frame("A", 1, 0xFFFFFFFF).strip(),
+    "ACK3": control_frame("A", 0x1234, 3).strip(),
+    "NACK3": control_frame("N", 0x1234, 3).strip(),
+    "ACK2": control_frame("A", 0x1234, 2).strip(),
+    "NACK2": control_frame("N", 0x1234, 2).strip(),
+    "BATCH_END": data_frame(0x1234,2,("BATCH END count=2 crc=%08X" % zlib.crc32(b'samples: 1,2\nsamples: 3,4\n')).encode()),
 }
 defines = '\n'.join(f"#define {key} {c_literal(value)}" for key,value in macros.items())
 (out / "harness.c").write_text(prefix + module + defines + tests)

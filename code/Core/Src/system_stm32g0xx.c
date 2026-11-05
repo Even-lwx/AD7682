@@ -169,6 +169,10 @@
   * @param  无
   * @retval 无
   */
+/**
+ * @brief 在 C 运行环境建立前初始化芯片系统寄存器，供启动汇编调用。
+ * @return 无返回值。
+ */
 void SystemInit(void)
 {
   /* 配置向量表位置。 */
@@ -204,6 +208,10 @@ void SystemInit(void)
   * @param  无
   * @retval 无
   */
+/**
+ * @brief 根据 RCC 当前配置重新计算 SystemCoreClock，不修改实际时钟配置。
+ * @return 无返回值。
+ */
 void SystemCoreClockUpdate(void)
 {
   uint32_t tmp;

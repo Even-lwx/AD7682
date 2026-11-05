@@ -26,6 +26,10 @@ SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
 /* SPI1 初始化函数。 */
+/**
+ * @brief 初始化 SPI1 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_SPI1_Init(void)
 {
 
@@ -62,6 +66,10 @@ void MX_SPI1_Init(void)
 
 }
 /* SPI2 初始化函数。 */
+/**
+ * @brief 初始化 SPI2 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_SPI2_Init(void)
 {
 
@@ -97,6 +105,11 @@ void MX_SPI2_Init(void)
 
 }
 
+/**
+ * @brief 为对应外设配置底层时钟、GPIO、DMA 或中断资源。
+ * @param spiHandle 需要初始化或释放底层资源的 SPI 外设句柄。
+ * @return 无返回值。
+ */
 void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
 {
 
@@ -169,6 +182,11 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
   }
 }
 
+/**
+ * @brief 释放对应外设的底层时钟、GPIO、DMA 或中断资源。
+ * @param spiHandle 需要初始化或释放底层资源的 SPI 外设句柄。
+ * @return 无返回值。
+ */
 void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
 {
 

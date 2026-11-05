@@ -15,15 +15,24 @@ ROW = b"2026.000,11.000,2.000,8.000,50.000,9.000,25.910,53.950,1024.200,1023.900
 
 
 class ProtocolTests(unittest.TestCase):
+    """本模块的 ProtocolTests 数据和行为封装。"""
     def receiver(self, accept=None):
+        """建立测试接收器及用于断言的数据、发送和事件缓存。
+
+        参数：
+        accept：提交已验证负载的回调。
+
+        返回：用于测试断言的帧、接收器或匹配事件。"""
         self.sent, self.rows, self.events = [], [], []
         return ReliableReceiver(0x1234, self.sent.append, accept or self.rows.append,
                                 lambda *event: self.events.append(event))
 
     def test_crc_standard_vector(self):
+        """校验 CRC16 标准向量，确认算法参数一致。无参数；断言失败抛出测试异常，无返回值。"""
         self.assertEqual(crc16(b"123456789"), 0x4B37)
 
     def test_fragmented_stream_and_duplicate_ack(self):
+        """验证分片输入重组及重复帧补 ACK。无参数；断言失败抛出测试异常，无返回值。"""
         rx = self.receiver()
         frame = data_frame(0x1234, 1, SAMPLE.encode())
         for b in frame:
@@ -34,6 +43,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(self.sent, [control_frame("A", 0x1234, 1)] * 2)
 
     def test_each_header_payload_and_crc_bit_error(self):
+        """逐位损坏帧头、负载和 CRC，确认均被拒绝。无参数；断言失败抛出测试异常，无返回值。"""
         frame = data_frame(0x1234, 1, SAMPLE.encode())
         for index in (6, 15, 24, 35, len(frame)-4):
             with self.subTest(index=index):
@@ -46,12 +56,14 @@ class ProtocolTests(unittest.TestCase):
                 self.assertEqual(self.rows, [SAMPLE])
 
     def test_one_nack_only_then_timeout_responsibility_is_mcu(self):
+        """确认同一预期帧只发一次 NACK，随后由 MCU 超时处理。无参数；断言失败抛出测试异常，无返回值。"""
         rx = self.receiver()
         rx.feed(b"@broken\r\n@broken\r\n")
         self.assertEqual(rx.nacks, 1)
         self.assertEqual(rx.bad, 2)
 
     def test_stale_session_and_sequence_gap(self):
+        """拒绝旧会话并检测序号缺口。无参数；断言失败抛出测试异常，无返回值。"""
         rx = self.receiver()
         rx.feed(data_frame(99, 1, SAMPLE.encode()))
         self.assertFalse(self.sent)
@@ -60,6 +72,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(self.rows)
 
     def test_length_error_and_resync(self):
+        """拒绝长度错误并从下一个帧标记恢复同步。无参数；断言失败抛出测试异常，无返回值。"""
         rx = self.receiver()
         rx.feed(b"partial\x00" + data_frame(0x1234, 1, SAMPLE.encode()))
         self.assertEqual(self.rows, [SAMPLE])
@@ -68,6 +81,7 @@ class ProtocolTests(unittest.TestCase):
             unpack_frame(frame.replace(b"0003", b"0004"))
 
     def test_wrap(self):
+        """验证 32 位序号回绕后仍能连续接收。无参数；断言失败抛出测试异常，无返回值。"""
         rx = self.receiver()
         rx.expected = 0xFFFFFFFF
         rx.feed(data_frame(0x1234, 0xFFFFFFFF, SAMPLE.encode()))
@@ -76,7 +90,14 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(len(self.rows), 2)
 
     def test_disk_failure_must_not_ack(self):
+        """验证磁盘写入失败时不会向 MCU 确认。无参数；断言失败抛出测试异常，无返回值。"""
         def fail(text):
+            """模拟文件写入失败，验证失败时不会确认未保存的数据。
+
+            参数：
+            text：命令、数据或提示文本。
+
+            返回：无返回值；结果通过对象状态、文件或事件通知。"""
             raise OSError("disk full")
         rx = self.receiver(fail)
         with self.assertRaises(OSError):
@@ -85,7 +106,9 @@ class ProtocolTests(unittest.TestCase):
 
 
 class CsvTests(unittest.TestCase):
+    """本模块的 CsvTests 数据和行为封装。"""
     def test_exact_vofa_bytes_and_same_second_preserved(self):
+        """逐字节核对 VOFA CSV，保留同秒多条记录。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "a.part"
             target = Path(folder) / "a.csv"
@@ -98,6 +121,7 @@ class CsvTests(unittest.TestCase):
 
     def test_real_vofa_sample_compatibility(self):
         # 导出样本来自用户已有的 VOFA 文件。
+        """核对实测 VOFA 样例的 float32 与 CSV 格式兼容性。无参数；断言失败抛出测试异常，无返回值。"""
         sample = Path(__file__).parents[1] / "log" / "1030-1102-1号板.csv"
         if not sample.exists():
             self.skipTest("Original measurement CSV not present")
@@ -110,6 +134,7 @@ class CsvTests(unittest.TestCase):
         self.assertEqual(sample_values(payload, True), row)
 
     def test_partial_not_promoted_and_snapshot(self):
+        """确认未完成历史不生成最终文件，快照仅包含已接收内容。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder:
             path, target = Path(folder)/"a.part", Path(folder)/"a.csv"
             cap = Capture(path, True, target)
@@ -126,12 +151,14 @@ class CsvTests(unittest.TestCase):
             self.assertFalse(target.exists())
 
     def test_empty_dump_header(self):
+        """确认空历史导出仍有正确 CSV 表头。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder:
             cap = Capture(Path(folder)/"a.part", True, Path(folder)/"a.csv")
             cap.finish(0, 0)
             self.assertEqual(len(cap.path.read_bytes().splitlines()), 1)
 
     def test_mixed_live_history_rejected(self):
+        """拒绝实时与历史不同列数混写。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder:
             cap = Capture(Path(folder)/"a.part", True)
             try:
@@ -142,19 +169,88 @@ class CsvTests(unittest.TestCase):
 
 
 class IntegrationTests(unittest.TestCase):
+    """本模块的 IntegrationTests 数据和行为封装。"""
+    def test_1000_batch_full_worker_retransmits_without_duplicate_csv(self):
+        """验证 1000 条批次完整导出及重发去重。无参数；断言失败抛出测试异常，无返回值。"""
+        from demo import DemoSerial
+        class LargeDemo(DemoSerial):
+            """本模块的 LargeDemo 数据和行为封装。"""
+            def __init__(self):
+                """初始化本对象的状态、缓存及所需资源；参数含义见下方。
+
+                返回：无返回值；结果通过对象状态、文件或事件通知。"""
+                super().__init__()
+                self.record_count=2103
+        with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ",{"LOCALAPPDATA":folder}), patch("demo.DemoSerial",LargeDemo):
+            events=queue.Queue()
+            device=Device(events)
+            device.start("DEMO",921600)
+            try:
+                self.wait_event(events,"ready")
+                target=Path(folder)/"large.csv"
+                device.command("dump",(str(target),"raw","old","",1000))
+                self.assertEqual(self.wait_event(events,"done")[2],2103)
+                lines=target.read_bytes().splitlines()
+                self.assertEqual(len(lines),2104)
+                self.assertEqual(len(set(lines[1:])),2103)
+                self.assertEqual(device.rx.nacks,3)
+                self.assertFalse(device.serial.sampling_paused)
+            finally:
+                device.command("disconnect")
+                self.wait_event(events,"disconnected")
+
+    def test_old_firmware_falls_back_to_single_row_ack(self):
+        """验证旧固件回退到逐条确认。无参数；断言失败抛出测试异常，无返回值。"""
+        from demo import DemoSerial
+
+        class OldFirmware(DemoSerial):
+            """本模块的 OldFirmware 数据和行为封装。"""
+            def write(self, data):
+                """解析电脑发送的命令和 ACK/NACK，推进模拟 MCU 状态并生成响应。
+
+                参数：
+                data：待发送字节串。
+
+                返回：已消费的字节数。"""
+                if data.decode().strip() == "link window 16" or data.decode().strip().startswith("link batch "):
+                    self.text("Unknown setting command")
+                    return len(data)
+                return super().write(data)
+
+        with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", {"LOCALAPPDATA": folder}), patch("demo.DemoSerial", OldFirmware):
+            events = queue.Queue()
+            device = Device(events)
+            device.start("DEMO", 921600)
+            try:
+                self.wait_event(events, "ready")
+                device.command("dump", (str(Path(folder)/"old.csv"), "raw", "old", ""))
+                self.assertEqual(self.wait_event(events, "done")[2], 1000)
+                self.assertFalse(device.serial.window_enabled)
+            finally:
+                device.command("disconnect")
+                self.wait_event(events, "disconnected")
+
     def test_dump_disconnect_reconnect_releases_exclusive_port(self):
+        """验证导出、断开、重新连接会释放独占串口。无参数；断言失败抛出测试异常，无返回值。"""
         from demo import DemoSerial
 
         class ExclusiveSerial(DemoSerial):
+            """本模块的 ExclusiveSerial 数据和行为封装。"""
             occupied = False
 
             def __init__(self):
+                """初始化本对象的状态、缓存及所需资源；参数含义见下方。
+
+                返回：无返回值；结果通过对象状态、文件或事件通知。"""
                 if type(self).occupied:
                     raise PermissionError("port still owned")
                 type(self).occupied = True
                 super().__init__()
 
             def close(self):
+                """关闭测试串口并释放模拟占用状态。
+
+                返回：无返回值；结果通过对象状态、文件或事件通知。"""
                 time.sleep(0.03)
                 type(self).occupied = False
 
@@ -179,6 +275,14 @@ class IntegrationTests(unittest.TestCase):
                     self.assertFalse(ExclusiveSerial.occupied)
 
     def wait_event(self, events, name, seconds=15):
+        """在截止时间内等待指定设备事件，超时使测试失败。
+
+        参数：
+        events：线程安全的界面事件队列。
+        name：任务名或待提取函数名。
+        seconds：测试输入，约束见调用处及断言。
+
+        返回：用于测试断言的帧、接收器或匹配事件。"""
         end = time.monotonic()+seconds
         while time.monotonic() < end:
             try:
@@ -191,6 +295,7 @@ class IntegrationTests(unittest.TestCase):
         self.fail("Timed out waiting for " + name)
 
     def test_serial_worker_full_dump_with_corruption_and_live_restart(self):
+        """验证串口线程损坏帧重发、完整导出和实时接收恢复。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", {"LOCALAPPDATA": folder}):
             events = queue.Queue()
             device = Device(events)
@@ -205,7 +310,8 @@ class IntegrationTests(unittest.TestCase):
                 self.assertTrue(complete)
                 self.assertEqual(rows, 1000)
                 self.assertEqual(Path(path), target)
-                self.assertGreater(device.rx.nacks, 10)
+                self.assertGreater(device.rx.nacks, 5)
+                self.assertFalse(device.serial.sampling_paused)
                 lines = target.read_bytes().splitlines()
                 self.assertEqual(len(lines), 1001)
                 self.assertEqual(lines[0], b",".join(f"I{i}".encode() for i in range(15)))
@@ -234,6 +340,7 @@ class IntegrationTests(unittest.TestCase):
                 self.assertTrue(device.finished)
 
     def test_device_settings_then_clear_and_empty_export(self):
+        """验证设置、清空与空历史导出流程。无参数；断言失败抛出测试异常，无返回值。"""
         with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", {"LOCALAPPDATA": folder}):
             events = queue.Queue()
             device = Device(events)
@@ -274,10 +381,18 @@ class IntegrationTests(unittest.TestCase):
                 self.assertTrue(device.finished)
 
     def test_missing_clear_reply_is_unknown_and_not_retried(self):
+        """确认清空响应丢失时报告未知结果且不重发命令。无参数；断言失败抛出测试异常，无返回值。"""
         from demo import DemoSerial
 
         class MissingClearReply(DemoSerial):
+            """本模块的 MissingClearReply 数据和行为封装。"""
             def text(self, text):
+                """把一行模拟 MCU 文本追加到串口接收缓冲区。
+
+                参数：
+                text：命令、数据或提示文本。
+
+                返回：无返回值；结果通过对象状态、文件或事件通知。"""
                 if text != "LOG CLEAR OK":
                     super().text(text)
 
@@ -313,7 +428,9 @@ class IntegrationTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
+    """本模块的 SettingsTests 数据和行为封装。"""
     def test_interval_and_date_validation(self):
+        """校验记录间隔步进、范围与日期合法性。无参数；断言失败抛出测试异常，无返回值。"""
         for value, expected in (("0.5", "0.5"), (" 2 ", "2.0"), ("86400", "86400.0"), ("2.500", "2.5")):
             self.assertEqual(interval_seconds(value), expected)
         for value in ("0", "0.1", "86400.5", "nan", "inf", "abc", "1\r\nlog clear", "-5"):
@@ -325,6 +442,7 @@ class SettingsTests(unittest.TestCase):
                 rtc_datetime(value)
 
     def test_settings_ack_error_readback_mismatch_and_rtc_voltage_flag(self):
+        """覆盖设置错误、回读不一致及 RTC 低电压标志。无参数；断言失败抛出测试异常，无返回值。"""
         from demo import DemoSerial
         with tempfile.TemporaryDirectory() as folder:
             events = queue.Queue()

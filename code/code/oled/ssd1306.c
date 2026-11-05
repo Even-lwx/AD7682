@@ -46,6 +46,14 @@ static const uint8_t g_font[][5] = {
  {8,8,0x3e,8,8},{0x20,0x10,8,4,2},{0x23,0x13,8,0x64,0x62}
 };
 
+/**
+ * @brief 设置 OLED D/C 和片选，通过 SPI 发送命令或显示数据。
+ * @param data D/C 选择，0 发送命令，非 0 发送像素数据。
+ * @param bytes 待发送的 OLED 命令或像素字节数组。
+ * @param count 待发送的字节数。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef Send(uint8_t data, const uint8_t *bytes, uint16_t count)
 {
  HAL_StatusTypeDef status;
@@ -61,6 +69,13 @@ static HAL_StatusTypeDef Send(uint8_t data, const uint8_t *bytes, uint16_t count
  return status;
 }
 
+/**
+ * @brief 设置 OLED 页地址与列地址，写入一页 128 字节像素。
+ * @param page OLED 页编号。
+ * @param pixels 一页 128 字节的像素数据。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef WritePage(uint8_t page, const uint8_t pixels[128])
 {
  uint8_t address[3] = {0xb0U, 0x00U, 0x10U};
@@ -71,6 +86,12 @@ static HAL_StatusTypeDef WritePage(uint8_t page, const uint8_t pixels[128])
  return status;
 }
 
+/**
+ * @brief 绑定 SPI、复位 OLED 并发送显示控制器初始化命令。
+ * @param spi SPI 外设句柄，须已完成初始化。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 HAL_StatusTypeDef SSD1306_Init(SPI_HandleTypeDef *spi)
 {
  /* 128×64、页寻址、交替 COM 配置、内部电荷泵。
@@ -109,6 +130,12 @@ HAL_StatusTypeDef SSD1306_Init(SPI_HandleTypeDef *spi)
  return status;
 }
 
+/**
+ * @brief 在刷新周期到达且旧帧已完成时开始普通显示帧。
+ * @param now 当前 HAL 毫秒时间戳。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 uint8_t SSD1306_BeginFrame(uint32_t now)
 {
  if (!g_ready || g_page != OLED_IDLE || (uint32_t)(now-g_frame_tick) < OLED_FRAME_PERIOD_MS)
@@ -119,6 +146,13 @@ uint8_t SSD1306_BeginFrame(uint32_t now)
  return 1U;
 }
 
+/**
+ * @brief 复制一行文本到显示任务的行缓存，供后续逐页绘制。
+ * @param row 文本显示行编号，从 0 开始。
+ * @param text 以零结尾的文本或命令字符串。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 void SSD1306_SetLine(uint8_t row, const char *text)
 {
  uint8_t i;
@@ -127,6 +161,12 @@ void SSD1306_SetLine(uint8_t row, const char *text)
  g_lines[row][i] = 0;
 }
 
+/**
+ * @brief 立即开始用户操作触发的新帧，替换未完成的旧显示帧。
+ * @param now 当前 HAL 毫秒时间戳。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 void SSD1306_BeginUiFrame(uint32_t now)
 {
  if (!g_ready) { return; }
@@ -136,13 +176,30 @@ void SSD1306_BeginUiFrame(uint32_t now)
  g_page = 0U;
 }
 
+/**
+ * @brief 设置当前帧是否采用二倍大字体。
+ * @param enabled 功能开关或模式编码，具体取值见函数用途。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 void SSD1306_SetLargeText(uint8_t enabled)
 {
  g_large_text = enabled != 0U;
 }
 
+/**
+ * @brief 将当前帧切换为五行仪表盘显示布局。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 void SSD1306_SetDashboard(void) { g_large_text = 2U; }
 
+/**
+ * @brief 在主循环生成并发送至多一个显示页，避免长时间占用 SPI。
+ * @param now 当前 HAL 毫秒时间戳。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 void SSD1306_Process(uint32_t now)
 {
  uint8_t pixels[128] = {0};

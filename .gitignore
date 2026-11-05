@@ -1,4 +1,6 @@
 # 操作系统和编辑器元数据
+__pycache__/
+*.py[cod]
 .DS_Store
 Thumbs.db
 desktop.ini

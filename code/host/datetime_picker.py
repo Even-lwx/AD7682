@@ -1,4 +1,6 @@
-"""Calendar date selection and keyboard/wheel time editing using native Tk."""
+"""日期日历与时分秒步进控件。
+
+Calendar date selection and keyboard/wheel time editing using native Tk."""
 import calendar
 import tkinter as tk
 from datetime import datetime
@@ -6,7 +8,15 @@ from tkinter import ttk
 
 
 class DateTimePicker(ttk.Frame):
+    """本模块的 DateTimePicker 数据和行为封装。"""
     def __init__(self, master, value):
+        """初始化本对象的状态、缓存及所需资源；参数含义见下方。
+
+        参数：
+        master：测试输入，约束见调用处及断言。
+        value：配置值或事件负载。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         super().__init__(master)
         self.date = tk.StringVar()
         self.parts = [tk.StringVar() for _ in range(3)]
@@ -27,11 +37,20 @@ class DateTimePicker(ttk.Frame):
         self.set(value)
 
     def set(self, value):
+        """把日期时间写入日期框与时分秒控件。
+
+        参数：
+        value：配置值或事件负载。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.date.set(value.strftime("%Y-%m-%d"))
         for variable, number in zip(self.parts, (value.hour, value.minute, value.second)):
             variable.set(f"{number:02d}")
 
     def get(self):
+        """校验控件输入并返回 datetime，日期或时间非法时抛出 ValueError。
+
+        返回：经过校验的 datetime；非法输入抛出 ValueError。"""
         day = datetime.strptime(self.date.get().strip(), "%Y-%m-%d")
         if not 2000 <= day.year <= 2099:
             raise ValueError("年份须为 2000～2099")
@@ -39,6 +58,13 @@ class DateTimePicker(ttk.Frame):
         return day.replace(hour=hour, minute=minute, second=second)
 
     def step(self, index, direction):
+        """按方向递增或递减选定时间字段，越界时在字段范围内循环。
+
+        参数：
+        index：时分秒字段索引，0/1/2。
+        direction：步进方向，正数递增、负数递减。
+
+        返回：事件处理终止标志 break。"""
         limit = (24, 60, 60)[index]
         try:
             number = int(self.parts[index].get())
@@ -48,6 +74,12 @@ class DateTimePicker(ttk.Frame):
         return "break"
 
     def normalize(self, index):
+        """将合法时间字段补齐为两位数字，保留无效输入供导出校验提示。
+
+        参数：
+        index：时分秒字段索引，0/1/2。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         try:
             number = int(self.parts[index].get())
             if 0 <= number < (24, 60, 60)[index]:
@@ -56,6 +88,9 @@ class DateTimePicker(ttk.Frame):
             pass  # 保留无效输入供用户查看，由导出校验给出原因。
 
     def open_calendar(self):
+        """创建或前置日期选择弹窗，并显示当前月份。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if self.popup and self.popup.winfo_exists():
             self.popup.lift()
             return
@@ -93,6 +128,12 @@ class DateTimePicker(ttk.Frame):
         self.popup.geometry(f"+{x}+{y}")
 
     def move_month(self, direction):
+        """按方向切换日历月份，限制在 2000～2099 年。
+
+        参数：
+        direction：步进方向，正数递增、负数递减。
+
+        返回：事件处理终止标志 break。"""
         total = int(self.year.get())*12 + int(self.month.get())-1 + direction
         total = min(max(total, 2000*12), 2099*12+11)
         year, month = divmod(total, 12)
@@ -102,6 +143,9 @@ class DateTimePicker(ttk.Frame):
         return "break"
 
     def draw_calendar(self):
+        """按选定年月重建日历日期按钮，并标示当前选择。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         for child in self.days.winfo_children():
             child.destroy()
         year, month = int(self.year.get()), int(self.month.get())
@@ -115,9 +159,18 @@ class DateTimePicker(ttk.Frame):
                                padding=(3, 5), command=lambda d=day: self.choose(d)).grid(row=row, column=col, padx=1, pady=1)
 
     def choose(self, day):
+        """保存所选日期并关闭日历弹窗。
+
+        参数：
+        day：选中月份中的日期。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.date.set(f"{int(self.year.get()):04d}-{int(self.month.get()):02d}-{day:02d}")
         self.popup.destroy()
 
     def choose_today(self):
+        """把日期设为电脑今天并关闭日历弹窗。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.date.set(datetime.now().strftime("%Y-%m-%d"))
         self.popup.destroy()

@@ -148,6 +148,13 @@ static uint32_t g_dump_end_time;
 static uint32_t g_dump_matched;
 static uint32_t g_dump_read_errors;
 static uint8_t g_dump_report_pending;
+static uint8_t g_dump_exclusive;
+static uint8_t g_dump_adc_was_running, g_dump_scheduler_was_running;
+static uint32_t g_dump_pause_tick;
+/* Flash checkpoints allow replay without caching sixteen text rows in RAM. */
+static uint32_t g_window_dump_sequence, g_window_dump_remaining;
+static uint32_t g_window_dump_matched, g_window_dump_errors;
+static uint16_t g_window_scanned;
 static float g_sht_filtered_temperature;
 static float g_sht_filtered_humidity;
 static uint8_t g_sht_filter_valid;
@@ -216,6 +223,8 @@ static void Devices_Initialize(void);
 static void Samples_ProcessAndOutput(void);
 static void Serial_DumpLogs(void);
 static void RecordTimer_Init(void);
+static void Serial_DumpPauseSampling(void);
+static void Serial_DumpResumeSampling(void);
 static uint8_t SensorSample_ConsumeRequest(void);
 static void AdcDiag_ProcessRequest(void);
 static void AdcProbe_ProcessRequest(void);
@@ -253,6 +262,10 @@ static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4]);
   * @brief  应用程序入口。
   * @retval int 返回状态。
   */
+/**
+ * @brief 初始化时钟和外设，运行采样、记录、界面与串口命令调度；导出期间进入独占处理分支。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -360,6 +373,32 @@ int main(void)
     Serial_ProcessCommand();
     UartCrc_Process();
     if (UartCrc_IsFailed()) { g_dump_remaining = 0U; g_dump_report_pending = 0U; }
+    if (g_dump_exclusive)
+    {
+      /* Dedicated export loop: no ADC/sensor/UI/recording work. Keep RX DMA,
+       * UART commands and SysTick timeout processing alive on every row. */
+      Serial_DumpLogs();
+      if (UartCrc_IsFailed() || (g_dump_remaining == 0U && !g_dump_report_pending &&
+          (!UartCrc_IsEnabled() || !UartCrc_IsBusy())))
+      { Serial_DumpResumeSampling(); }
+      continue;
+    }
+    if (g_adc_diag_active == 0U)
+    {
+      uint8_t burst;
+      uint32_t burst_start = HAL_GetTick();
+      /* Give export a bounded burst rather than one row per sensor loop.
+       * ISR sampling stays enabled; drain records/commands between rows. */
+      for (burst = 0U; burst < 16U; burst++)
+      {
+        Serial_DumpLogs();
+        RecordWritePending();
+        Serial_ProcessCommand();
+        UartCrc_Process();
+        if (!UartCrc_WindowEnabled() || UartCrc_IsBusy() || UartCrc_IsFailed() ||
+            g_dump_remaining == 0U || HAL_GetTick() - burst_start >= 12U) { break; }
+      }
+    }
     if (g_adc_diag_active == 0U) { Ui_Process(); }
     /* 在阻塞式传感器读取前后各发送一个页面，防止
      * 连续的 20 ms 传感器请求使一帧绘制延长到八次循环。 */
@@ -373,7 +412,6 @@ int main(void)
       Samples_ProcessAndOutput();
     }
     RecordWritePending();
-    if (g_adc_diag_active == 0U) { Serial_DumpLogs(); }
     /* 日志和命令优先，诊断采集期间必须保持安静。 */
     if (g_adc_diag_active == 0U && g_record_due == 0U &&
         g_dump_remaining == 0U)
@@ -391,6 +429,10 @@ int main(void)
   * @brief 配置系统时钟。
   * @retval 无
   */
+/**
+ * @brief 配置系统时钟及总线分频；初始化失败时进入 Error_Handler。
+ * @return 无返回值。
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -436,6 +478,12 @@ void SystemClock_Config(void)
 
 /* 统一的阻塞式串口发送入口；所有输出均由主循环调用。
  * UART 硬件报告发送失败时最多重发一次；奇偶校验只能由接收端检测。 */
+/**
+ * @brief 按当前链路模式发送文本；采样行与完成信息走 CRC 协议，其余文本直接发送。
+ * @param text 以零结尾的文本或命令字符串。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_Write(const char *text)
 {
   HAL_StatusTypeDef status;
@@ -456,6 +504,10 @@ static void Serial_Write(const char *text)
  * 否则 TIMCLK=2*PCLK；分频至 10 kHz，每 10 个计数产生一次 1 ms
  * 中断。中断同时维护记录秒计数，并按 SENSOR_SAMPLE_PERIOD_MS 置位
  * 其他传感器请求。ADC 单独使用 TIM3，I2C/SPI2/串口留在主循环。 */
+/**
+ * @brief 配置 TIM3 的 ADC 采样节拍与 TIM14 的毫秒调度节拍并启用中断。
+ * @return 无返回值。
+ */
 static void RecordTimer_Init(void)
 {
   uint32_t clock = HAL_RCC_GetPCLK1Freq();
@@ -499,6 +551,10 @@ static void RecordTimer_Init(void)
 
 /* 原子地取出一次定时器产生的采样请求。若一次采集超过周期，
  * 多个周期会合并为一个请求，避免采集完成后出现突发追赶。 */
+/**
+ * @brief 在临界区取走并清除慢速传感器采样请求，避免主循环与中断竞争。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t SensorSample_ConsumeRequest(void)
 {
   uint8_t request;
@@ -512,12 +568,81 @@ static uint8_t SensorSample_ConsumeRequest(void)
   return request;
 }
 
+/**
+ * @brief 保存运行状态，停止 TIM3/TIM14 采样调度并暂停普通任务，进入独占导出。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
+static void Serial_DumpPauseSampling(void)
+{
+  uint32_t primask;
+  if (g_dump_exclusive) { return; }
+  /* Commit the final sample captured before the pause, before the snapshot. */
+  RecordWritePending();
+  primask = __get_PRIMASK();
+  __disable_irq();
+  g_dump_adc_was_running = (uint8_t)((TIM3->CR1 & TIM_CR1_CEN) != 0U);
+  g_dump_scheduler_was_running = (uint8_t)((TIM14->CR1 & TIM_CR1_CEN) != 0U);
+  TIM3->CR1 &= (uint32_t)~TIM_CR1_CEN;
+  TIM14->CR1 &= (uint32_t)~TIM_CR1_CEN;
+  TIM3->SR = TIM14->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+  HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+  g_record_due = g_sensor_sample_request = 0U;
+  g_dump_pause_tick = HAL_GetTick();
+  g_dump_exclusive = 1U;
+  __set_PRIMASK(primask);
+  Serial_Write("LOG DUMP SAMPLING: PAUSED\r\n");
+}
+
+/**
+ * @brief 退出独占导出，恢复调度、重建滤波窗口并请求新数据，不补采导出期间的数据。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
+static void Serial_DumpResumeSampling(void)
+{
+  uint32_t elapsed, subsecond, primask;
+  if (!g_dump_exclusive) { return; }
+  primask = __get_PRIMASK();
+  __disable_irq();
+  elapsed = HAL_GetTick() - g_dump_pause_tick;
+  subsecond = g_sensor_timer_milliseconds + elapsed;
+  g_record_timer_milliseconds += elapsed;
+  g_record_timer_seconds += subsecond / 1000U;
+  g_sensor_timer_milliseconds = (uint16_t)(subsecond % 1000U);
+  /* Do not backfill the pause with stale values. Rebuild ADC and pressure
+   * filters and obtain fresh slow sensors before the next logged interval. */
+  g_record_last_millisecond = g_record_timer_milliseconds;
+  g_record_due = 0U;
+  g_sensor_sample_elapsed_ms = 0U;
+  g_sensor_sample_request = 1U;
+  memset(g_adc_temporal_filters, 0, sizeof(g_adc_temporal_filters));
+  memset(&g_u7_pressure_average, 0, sizeof(g_u7_pressure_average));
+  memset(&g_u11_pressure_average, 0, sizeof(g_u11_pressure_average));
+  g_sht_filter_valid = 0U;
+  TIM3->CNT = TIM14->CNT = 0U;
+  TIM3->SR = TIM14->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM3_IRQn);
+  HAL_NVIC_ClearPendingIRQ(TIM14_IRQn);
+  if (g_dump_adc_was_running) { TIM3->CR1 |= TIM_CR1_CEN; }
+  if (g_dump_scheduler_was_running) { TIM14->CR1 |= TIM_CR1_CEN; }
+  g_dump_exclusive = 0U;
+  __set_PRIMASK(primask);
+  Serial_Write("LOG DUMP SAMPLING: RESUMED\r\n");
+}
+
 /* 仅在两次诊断采集之间、TIM3 停止时使用。
  * 模式：0=PLL 64 MHz，1=PLL/AHB2 32 MHz，2=HSI 16 MHz 且 PLL 开启，
  * 3=HSI 16 MHz 且 PLL 关闭；所有模式下 HSI 自身都必须保持开启。
  * HAL 会重新校准 SysTick，还需显式重新校准三个硬件定时器
  * 和串口。TIM2 仅在阶段边界、产生任何时间戳之前复位。
  * 状态位：RCC=1、串口初始化=2、接收启动=4、SPI2 初始化=8、PLL=16。 */
+/**
+ * @brief 诊断时切换 MCU 时钟方案，并更新受影响的外设计时配置。
+ * @param mode 硬件诊断模式编号。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
 {
   RCC_ClkInitTypeDef clocks = {0};
@@ -617,6 +742,11 @@ static uint8_t AdcDiag_SetCoreClock(uint8_t mode)
  * 每轮诊断保存一次各寄存器原值，并校验每次
  * 写入；结果的 bit0/1 分别表示 U7/U11 设置或读回失败。
  * 由于软件 I2C 延时依赖 CPU 周期，必须在 64 MHz 下调用。 */
+/**
+ * @brief 按掩码暂停两颗 LPS22HH，保存或恢复控制寄存器用于诊断对比。
+ * @param power_down_mask 气压计停机选择掩码。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask)
 {
   const LPS22HH_Device *devices[2] = { &g_lps22hh_u7, &g_lps22hh_u11 };
@@ -650,6 +780,11 @@ static uint8_t AdcDiag_SetLpsMode(uint8_t power_down_mask)
  * 不要重新初始化 GPIO 模式或复用功能，也不要修改由 ADC 驱动 SDO/MISO 的 PA6。
  * STM32G0 HAL 中 LOW=00、HIGH=10；这里不改变输出电平或时钟频率。
  * high_mask 中 bit0=SCK、bit1=DIN、bit2=CNV；仅在采集之外调用。 */
+/**
+ * @brief 按掩码调整诊断所用 GPIO 的输出边沿速度。
+ * @param high_mask GPIO 高速边沿选择掩码。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask)
 {
   const uint32_t mask = (3UL << 2U) | (3UL << 14U) | (3UL << 10U);
@@ -664,6 +799,11 @@ static uint8_t AdcDiag_SetEdgeSpeed(uint8_t high_mask)
   return (GPIOA->OSPEEDR & mask) == desired ? 0U : 1U;
 }
 
+/**
+ * @brief 将指定诊断阶段的采样缓存和统计数据发送至串口。
+ * @param phase 诊断阶段编号。
+ * @return 无返回值。
+ */
 static void AdcDiag_DumpPhase(uint8_t phase)
 {
   char line[176];
@@ -699,6 +839,10 @@ static void AdcDiag_DumpPhase(uint8_t phase)
  * 18:baseline, 19:U7 powerdown, 20:U11 powerdown, 21:both powerdown,
  * 22:baseline, 23:HSI16 PLLon, 24:HSI16 PLLoff, 25:HSI16 PLLon, 26:baseline,
  * 27:HSI16 PLLoff + both LPS powerdown, 28:baseline. */
+/**
+ * @brief 设置当前诊断阶段的硬件条件并启动该阶段采集。
+ * @return 无返回值。
+ */
 static void AdcDiag_StartPhase(void)
 {
   char line[176];
@@ -816,6 +960,10 @@ static void AdcDiag_StartPhase(void)
 
 /* 测试结束先恢复中断与时间基准，再输出缓冲数据。
  * 补偿只用于 HAL/记录时间（毫秒量级），分析用的 CNV 时间全部来自 TIM2。 */
+/**
+ * @brief 停止诊断阶段采集，输出结果并恢复阶段修改的硬件状态。
+ * @return 无返回值。
+ */
 static void AdcDiag_StopPhase(void)
 {
   uint32_t primask = __get_PRIMASK();
@@ -909,6 +1057,10 @@ static void AdcDiag_StopPhase(void)
 /* 仅应用层探测：复用现有单通道原始采集驱动和
  * 工作区，不改变参考源、GPIO 速度、SPI 时钟或转换时序。
  * 采集时不进行串口发送、I2C 或 Flash 访问，SysTick、TIM14 和接收保持开启。 */
+/**
+ * @brief 计算单通道探测下一次转换的间隔，支持固定、伪随机及突发节奏。
+ * @return 下一次转换的调度间隔，单位 µs。
+ */
 static uint32_t AdcProbe_NextPeriod(void)
 {
   if (g_adc_diag_phase == 1U)
@@ -925,6 +1077,10 @@ static uint32_t AdcProbe_NextPeriod(void)
   return 10000U;
 }
 
+/**
+ * @brief 结束单通道探测，恢复正常采样状态并输出结束标记。
+ * @return 无返回值。
+ */
 static void AdcProbe_Finish(void)
 {
   /* 原始采集占用了滤波器内存，重新开启中断前先清空；
@@ -949,6 +1105,10 @@ static void AdcProbe_Finish(void)
   TIM3->CR1 = TIM_CR1_CEN;
 }
 
+/**
+ * @brief 在主循环处理单通道探测请求，分块采集原始 ADC 与 CNV 时间戳后输出。
+ * @return 无返回值。
+ */
 static void AdcProbe_ProcessRequest(void)
 {
   AdcProbePoint *point;
@@ -1024,6 +1184,10 @@ static void AdcProbe_ProcessRequest(void)
   }
 }
 
+/**
+ * @brief 在主循环推进多阶段 ADC 诊断状态机，执行阶段切换与恢复。
+ * @return 无返回值。
+ */
 static void AdcDiag_ProcessRequest(void)
 {
   uint16_t samples[5];
@@ -1148,6 +1312,10 @@ static void AdcDiag_ProcessRequest(void)
  * 外部器件增加有限重试，避免器件电源/复位释放稍慢时第一次访问失败。
  * 重试只执行无副作用的探测/配置，不重复执行 Flash 擦除。
  */
+/**
+ * @brief 初始化各传感器、RTC、Flash 日志和 OLED，并报告设备状态。
+ * @return 无返回值。
+ */
 static void Devices_Initialize(void)
 {
   uint8_t retry;
@@ -1256,6 +1424,11 @@ static void Devices_Initialize(void)
  * 5.5V位于正常1S最高4.2V与正常2S放电电压之间。
  * 仅凭电压无法可靠识别深度过放的2S电池。
  * 1S >=4.0V常亮、3.7~4.0V闪烁；2S阈值对应8.0/7.4V。 */
+/**
+ * @brief 根据电池电压更新状态指示灯及对应闪烁状态。
+ * @param voltage 电压值，单位 V；指针形式用于接收输出。
+ * @return 无返回值。
+ */
 static void BatteryLed_Update(float voltage)
 {
   static uint32_t last_toggle_tick;
@@ -1300,6 +1473,11 @@ static void BatteryLed_Update(float voltage)
 
 /* ADC 屏蔽 CPU 中断时 DMA 仍会读取 RDR；半传输和全传输回调
  * 不解析命令，由主循环消费循环缓冲区。 */
+/**
+ * @brief 启动 USART1 循环 DMA 接收，将输入存入接收环形缓冲区。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static HAL_StatusTypeDef Serial_StartReceive(void)
 {
   g_uart_dma_read = 0U;
@@ -1308,11 +1486,21 @@ static HAL_StatusTypeDef Serial_StartReceive(void)
   return HAL_UART_Receive_DMA(&huart1, (uint8_t *)g_uart_dma_buffer, UART_RX_DMA_SIZE);
 }
 
+/**
+ * @brief 处理 HAL 接收完成回调，核对串口实例并维护接收状态。
+ * @param huart 触发回调的 UART 句柄。
+ * @return 无返回值。
+ */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1) { g_uart_dma_wraps++; }
 }
 
+/**
+ * @brief 在主循环读取 DMA 新到字节，按换行组装命令并检测接收覆盖。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_PollReceive(void)
 {
   uint32_t primask, wraps, remaining, produced;
@@ -1363,6 +1551,11 @@ static void Serial_PollReceive(void)
   }
 }
 
+/**
+ * @brief 在串口错误回调中记录错误和恢复请求，由主循环完成接收恢复。
+ * @param huart 触发回调的 UART 句柄。
+ * @return 无返回值。
+ */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1)
@@ -1376,6 +1569,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   }
 }
 
+/**
+ * @brief 在主循环清理 UART 错误、重启 DMA 接收并重置命令拼装状态。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_RecoverReceive(void)
 {
   uint32_t primask;
@@ -1415,15 +1613,76 @@ static void Serial_RecoverReceive(void)
   }
 }
 
+/**
+ * @brief 识别空格、制表符、回车和换行。
+ * @param c 待判断或转换的 ASCII 字符。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_IsSpace(char c){return (uint8_t)(c==' '||c=='\t'||c=='\r'||c=='\n');}
+/**
+ * @brief 将 ASCII 大写字母转换为小写，其他字符保持原值。
+ * @param c 待判断或转换的 ASCII 字符。
+ * @return 转换后的 ASCII 字符。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_ToLower(char c){return (uint8_t)((c>='A'&&c<='Z')?(c+('a'-'A')):c);}
+/**
+ * @brief 忽略 ASCII 大小写比较两个以零结尾的字符串。
+ * @param a 第一个输入值或字符串。
+ * @param b 第二个输入值或字符串。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_Equals(const char *a,const char *b){while(*a&&*b&&Serial_ToLower(*a)==Serial_ToLower(*b)){a++;b++;}return (uint8_t)(*a==0&&*b==0);}
+/**
+ * @brief 原地去掉首尾空白，返回有效子串起点；调用者必须传入可写字符串。
+ * @param s 待处理字符串；原地修剪接口要求可写内存。
+ * @return 修剪后的子串首地址，仍指向原缓冲区。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static char *Serial_Trim(char *s){char *e;while(Serial_IsSpace(*s))s++;e=s+strlen(s);while(e>s&&Serial_IsSpace(e[-1]))e--;*e=0;return s;}
+/**
+ * @brief 将指定数量的十进制字符解析到输出字节，遇非数字返回失败。
+ * @param s 待处理字符串；原地修剪接口要求可写内存。
+ * @param n 需要解析的十进制字符数。
+ * @param value 待编码、待解析或待写入的值；指针形式用于接收解析输出。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_Digits(const char *s,uint8_t n,uint8_t *value){uint8_t i,v=0;if(!s||!value)return 0;for(i=0;i<n;i++){if(s[i]<'0'||s[i]>'9')return 0;v=(uint8_t)(v*10U+(uint8_t)(s[i]-'0'));}*value=v;return 1;}
+/**
+ * @brief 按公历规则判断指定年份是否为闰年。
+ * @param year 公历年份。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_IsLeap(uint16_t year){return (uint8_t)((year%4U==0U&&year%100U!=0U)||(year%400U==0U));}
+/**
+ * @brief 计算月份天数并处理闰年二月；调用前须保证月份为 1～12。
+ * @param year 公历年份。
+ * @param month 月份，1～12。
+ * @return 该月份的天数。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_DaysInMonth(uint16_t year,uint8_t month){static const uint8_t days[]={31,28,31,30,31,30,31,31,30,31,30,31};if(month==2U&&Serial_IsLeap(year))return 29U;return days[month-1U];}
+/**
+ * @brief 计算 2000 年起的公历星期，结果 0 为周日、6 为周六。
+ * @param year 公历年份。
+ * @param month 月份，1～12。
+ * @param day 日期，须已校验有效。
+ * @return 星期编号，0 为周日、6 为周六。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_Weekday(uint16_t year,uint8_t month,uint8_t day){uint32_t days=0;uint16_t y;uint8_t m;for(y=2000U;y<year;y++)days+=Serial_IsLeap(y)?366U:365U;for(m=1U;m<month;m++)days+=Serial_DaysInMonth(year,m);days+=(uint32_t)(day-1U);return (uint8_t)((6U+days)%7U);}
 
+/**
+ * @brief 解析并校验 SET 命令的日期时间，将合法结果写入 RTC 时间结构。
+ * @param s 待处理字符串；原地修剪接口要求可写内存。
+ * @param dt RTC 日期时间结构，按函数用途作为输入或解析输出。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
 {
   uint8_t yy,mo,da,hh,mi,se;uint16_t year;size_t n;
@@ -1435,6 +1694,12 @@ static uint8_t Serial_ParseSetTime(const char *s,PCF8563_DateTime *dt)
 }
 
 /* 自 2000-01-01 起的秒数；记录器存储 2000～2099 年。 */
+/**
+ * @brief 将 RTC 日期时间转换为相对 2000 年的秒数，供历史时间范围比较。
+ * @param dt RTC 日期时间结构，按函数用途作为输入或解析输出。
+ * @return 相对 2000 年的秒数；无效日期返回 0xFFFFFFFF。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint32_t Serial_DateTimeSeconds(const PCF8563_DateTime *dt)
 {
   uint32_t days = 0U;
@@ -1458,6 +1723,14 @@ static uint32_t Serial_DateTimeSeconds(const PCF8563_DateTime *dt)
   return ((days * 24U + dt->hours) * 60U + dt->minutes) * 60U + dt->seconds;
 }
 
+/**
+ * @brief 解析历史导出起止时间并转换为秒数，拒绝格式或日期不合法的输入。
+ * @param text 以零结尾的文本或命令字符串。
+ * @param length 连续处理的字节数，数组尺寸须与该长度匹配。
+ * @param seconds 接收相对 2000 年秒数的输出指针。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_ParseDumpTime(const char *text, size_t length, uint32_t *seconds)
 {
   char command[22] = "SET ";
@@ -1474,6 +1747,11 @@ static uint8_t Serial_ParseDumpTime(const char *text, size_t length, uint32_t *s
   return 1U;
 }
 
+/**
+ * @brief 输出本次历史导出的匹配条数和读取错误数，供上位机完成校验。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_PrintDumpResult(void)
 {
   char line[80];
@@ -1483,6 +1761,12 @@ static void Serial_PrintDumpResult(void)
   else { Serial_Write(line); }
 }
 
+/**
+ * @brief 解析模式和可选时间范围，建立 Flash 序号快照并启动独占历史导出。
+ * @param command 命令字或以零结尾的串口命令。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_StartLogDump(const char *command)
 {
   uint32_t start = 0U, end = 0U;
@@ -1522,6 +1806,7 @@ static void Serial_StartLogDump(const char *command)
     }
   }
   /* 先校验，再替换正在进行的导出，随后保存序号快照。 */
+  Serial_DumpPauseSampling();
   g_dump_time_filtered = filtered;
   g_dump_hpa = hpa;
   g_dump_start_time = start;
@@ -1552,13 +1837,23 @@ static void Serial_StartLogDump(const char *command)
 /* 厂家表格给出 0.5 V=35 kPa、4.5 V=135 kPa。
  * 仅在导出时换算，保持存储码值和无效值语义不变。
  * 不进行钳位：表格还给出 0 V=22.5 kPa、5 V=147.5 kPa。 */
+/**
+ * @brief 按厂家压力表将 ADC 码换算为 hPa：码值 × 5 / 65536 × 250 + 225。
+ * @param code ADC 码值；指针形式为输出，成功后写入。
+ * @return 计算后的值，量纲与用途说明一致。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static float Serial_AdcPressureHpa(float code)
 {
   if (!(code >= 0.0f && code < 65535.0f)) { return SENSOR_INVALID_FLOAT; }
   return code * (AD7682_REFERENCE_VOLTS * 250.0f / 65536.0f) + 225.0f;
 }
 
-/* setting 模式下只处理配置和日志命令；实时采样不会被暂停。 */
+/* 设置模式抑制实时串口输出；log dump 还会暂停传感器采样。 */
+/**
+ * @brief 将 Flash 保存的间隔和记录开关应用到运行时记录调度。
+ * @return 无返回值。
+ */
 static void Recording_ApplySavedConfig(void)
 {
   uint32_t primask = __get_PRIMASK();
@@ -1570,9 +1865,13 @@ static void Recording_ApplySavedConfig(void)
 }
 
 /* SW2 接 PB4、SW3 接 PB5，对应原理图 BUTTON1/BUTTON2，外部上拉，
- * 按下接地；在主循环轮询，绝不在中断中访问 SPI 或 Flash。 */
+ * 按下接地；中断消抖、主循环处理事件，不在中断中访问 SPI 或 Flash。 */
 /* 仅由 TIM14 以 1 kHz 调用，不访问菜单、显示屏或
  * Flash，只对 PB4/PB5 消抖并锁存简短的事件位。 */
+/**
+ * @brief 在 TIM14 毫秒中断中扫描按键、消抖并登记事件，不访问总线或打印。
+ * @return 无返回值。
+ */
 void Application_KeyScan1ms(void)
 {
   static uint8_t raw_state[2];
@@ -1616,6 +1915,10 @@ void Application_KeyScan1ms(void)
   }
 }
 
+/**
+ * @brief 根据菜单页面和当前测量值构建 OLED 显示内容，由主循环调用。
+ * @return 无返回值。
+ */
 static void Ui_Draw(void)
 {
   char line[32];
@@ -1635,6 +1938,10 @@ static void Ui_Draw(void)
   g_ui_dirty = 0U;
 }
 
+/**
+ * @brief 在主循环消费按键事件、修改菜单设置并推进 OLED 分页刷新。
+ * @return 无返回值。
+ */
 static void Ui_Process(void)
 {
   uint32_t now=HAL_GetTick();
@@ -1721,8 +2028,19 @@ static void Ui_Process(void)
   if (g_ui_dirty) { Ui_Draw(); }
 }
 
+/**
+ * @brief 通过串口输出设置模式支持的命令和参数格式。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_PrintSettingHelp(void){Serial_Write("SETTING MODE\r\nSET YY-MM-DD HH:MM:SS\r\nlog info\r\nlog start\r\nlog stop\r\nlog interval SECONDS (0.5 step)\r\nlog order old\r\nlog order new\r\nlog dump [raw|hpa]\r\nlog dump [raw|hpa] YYYY-MM-DD HH:MM:SS YYYY-MM-DD HH:MM:SS\r\nlog clear\r\ndisplay all\r\ndisplay adc\r\nbattery info\r\nbattery cal VOLTS (example: battery cal 8.120)\r\nbattery reset\r\nadcprobe 0..3\r\nexit\r\n");}
 
+/**
+ * @brief 解析电池状态、单点校准及复位命令并返回执行结果。
+ * @param command 命令字或以零结尾的串口命令。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_BatteryCommand(const char *command)
 {
   char line[160];
@@ -1772,6 +2090,13 @@ static void Serial_BatteryCommand(const char *command)
   Serial_Write(line);
 }
 /* 以半秒分辨率精确解析秒数，避免 scanf 或浮点舍入。 */
+/**
+ * @brief 将秒数字符串解析为毫秒，校验 0.5 秒步进及允许范围。
+ * @param text 以零结尾的文本或命令字符串。
+ * @param result 接收记录间隔毫秒数的输出指针。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static uint8_t Serial_ParseIntervalMs(const char *text, uint32_t *result)
 {
   uint32_t seconds=0U;
@@ -1799,6 +2124,12 @@ static uint8_t Serial_ParseIntervalMs(const char *text, uint32_t *result)
   return (uint8_t)(*p==0 && *result>=500UL && *result<=86400000UL && *result%500UL==0U);
 }
 
+/**
+ * @brief 处理串口校时命令，写入 RTC 后回读并报告日期时间和 VL 状态。
+ * @param command 命令字或以零结尾的串口命令。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_HandleSetTime(const char *command)
 {
   PCF8563_DateTime requested={0},actual={0};uint8_t vl=0;HAL_StatusTypeDef s;char line[128];
@@ -1810,6 +2141,11 @@ static void Serial_HandleSetTime(const char *command)
   (void)snprintf(line,sizeof(line),"RTC SET OK: 20%02u-%02u-%02u %02u:%02u:%02u VL=%u\r\n",actual.year,actual.month,actual.day,actual.hours,actual.minutes,actual.seconds,vl);Serial_Write(line);
 }
 
+/**
+ * @brief 分发完整串口命令，处理握手、ACK/NACK、日志、校时与诊断操作。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_ProcessCommand(void)
 {
   char command[64];char line[64];char *trimmed;uint8_t overflow;
@@ -1832,6 +2168,7 @@ static void Serial_ProcessCommand(void)
     if (!UartCrc_ParseHex8(trimmed + 12U, &session))
     { Serial_Write("LINK CRC ERROR: use link crc on SESSION8HEX\r\n"); return; }
     g_dump_remaining = 0U; g_dump_report_pending = 0U;
+    Serial_DumpResumeSampling();
     UartCrc_Enable(session);
     (void)snprintf(line, sizeof(line), "LINK CRC ON %08lX\r\n", (unsigned long)session);
     Serial_Write(line);
@@ -1840,8 +2177,26 @@ static void Serial_ProcessCommand(void)
   if (Serial_Equals(trimmed, "link crc off"))
   {
     g_dump_remaining = 0U; g_dump_report_pending = 0U;
+    Serial_DumpResumeSampling();
     UartCrc_Disable();
     Serial_Write("LINK CRC OFF\r\n"); return;
+  }
+  if (Serial_Equals(trimmed, "link window 16"))
+  {
+    if (!g_rtc_setting_mode || !UartCrc_IsEnabled() || UartCrc_IsBusy() ||
+        g_dump_remaining || g_dump_report_pending)
+    { Serial_Write("LINK WINDOW ERROR: enter idle setting mode\r\n"); return; }
+    UartCrc_SetWindow(1U);
+    Serial_Write("LINK WINDOW OK: 16\r\n"); return;
+  }
+  if (Serial_Equals(trimmed,"link batch 100") || Serial_Equals(trimmed,"link batch 1000"))
+  {
+    if (!g_rtc_setting_mode || !UartCrc_IsEnabled() || UartCrc_IsBusy() ||
+        g_dump_remaining || g_dump_report_pending)
+    { Serial_Write("LINK BATCH ERROR: enter idle setting mode\r\n"); return; }
+    UartCrc_SetWindow(Serial_Equals(trimmed,"link batch 1000") ? 3U : 2U);
+    Serial_Write(Serial_Equals(trimmed,"link batch 1000") ?
+                 "LINK BATCH OK: 1000\r\n" : "LINK BATCH OK: 100\r\n");return;
   }
   if (Serial_Equals(trimmed, "uart info"))
   {
@@ -1854,6 +2209,8 @@ static void Serial_ProcessCommand(void)
     Serial_Write(info);
     return;
   }
+  if (g_dump_exclusive && !Serial_Equals(trimmed, "exit"))
+  { Serial_Write("LOG DUMP BUSY: use exit to cancel\r\n"); return; }
   if(strncmp(trimmed,"adcprobe ",9U)==0)
   {
     if (UartCrc_IsEnabled()) { Serial_Write("ADC PROBE ERROR: disable CRC link first\r\n"); return; }
@@ -1910,7 +2267,7 @@ static void Serial_ProcessCommand(void)
     return;
   }
   if(Serial_Equals(trimmed,"setting")){g_rtc_setting_mode=1U;Serial_PrintSettingHelp();return;}
-  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;g_dump_report_pending=0U;if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
+  if(Serial_Equals(trimmed,"exit")){g_dump_remaining=0U;g_dump_report_pending=0U;Serial_DumpResumeSampling();UartCrc_SetWindow(0U);if(g_rtc_setting_mode){g_rtc_setting_mode=0U;Serial_Write("EXIT SETTING MODE\r\n");}return;}
   if(g_rtc_setting_mode)
   {
     if(strncmp(trimmed,"battery ",8U)==0)
@@ -1995,7 +2352,12 @@ static void Serial_ProcessCommand(void)
   }
 }
 
-/* 每次只发送一条历史记录，避免导出过程长时间阻塞采样。 */
+/* 每次扫描一条历史记录；由暂停采样后的独占主循环连续调用。 */
+/**
+ * @brief 在独占导出循环扫描一条 Flash 记录，筛选、换算和发送，维护批次检查点与重放状态。
+ * @return 无返回值。
+ * @note 在主循环调用；涉及总线或 Flash 的操作可能阻塞，不用于中断内执行。
+ */
 static void Serial_DumpLogs(void)
 {
   uint16_t year;
@@ -2004,6 +2366,15 @@ static void Serial_DumpLogs(void)
   uint8_t include;
   if (UartCrc_IsEnabled())
   {
+    if (UartCrc_TakeReplay())
+    {
+      g_dump_sequence = g_window_dump_sequence;
+      g_dump_remaining = g_window_dump_remaining;
+      g_dump_matched = g_window_dump_matched;
+      g_dump_read_errors = g_window_dump_errors;
+      g_dump_report_pending = 0U;
+      g_window_scanned = 0U;
+    }
     if (UartCrc_IsBusy() || UartCrc_IsFailed()) { return; }
     if (g_dump_report_pending)
     {
@@ -2013,11 +2384,20 @@ static void Serial_DumpLogs(void)
     }
   }
 
-  /* 每次主循环只发送一条，不阻塞采样、记录和命令处理。
+  /* 每次调用只扫描一条；独占主循环持续调用，并在记录之间处理命令和 ACK。
      固定序号快照：导出期间新增记录不混入本次导出。 */
   if (g_dump_remaining != 0U && g_rtc_setting_mode != 0U)
   {
     uint32_t sequence = g_dump_sequence;
+    if (UartCrc_WindowEnabled() && !UartCrc_WindowOpen())
+    {
+      g_window_dump_sequence = g_dump_sequence;
+      g_window_dump_remaining = g_dump_remaining;
+      g_window_dump_matched = g_dump_matched;
+      g_window_dump_errors = g_dump_read_errors;
+      g_window_scanned = 0U;
+      UartCrc_WindowBegin();
+    }
     g_dump_sequence = g_dump_newest_first ? sequence - 1U : sequence + 1U;
     g_dump_remaining--;
     if (DataLogger_ReadSequence(sequence, &sample, 100U) != HAL_OK)
@@ -2058,6 +2438,8 @@ static void Serial_DumpLogs(void)
         g_dump_matched++;
       }
     }
+    if (UartCrc_WindowOpen() && (++g_window_scanned >= UartCrc_WindowSize() || g_dump_remaining == 0U))
+    { UartCrc_WindowEnd(); }
     if (g_dump_remaining == 0U)
     {
       if (UartCrc_IsEnabled()) { g_dump_report_pending = 1U; }
@@ -2073,6 +2455,13 @@ static void Serial_DumpLogs(void)
 }
 
 /* 三点中值滤波：抑制 SHT41 偶发的孤立异常值。 */
+/**
+ * @brief 返回三个浮点数的中位数，用于抑制孤立尖峰。
+ * @param a 第一个输入值或字符串。
+ * @param b 第二个输入值或字符串。
+ * @param c 第三个待比较的浮点数。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 static float Median3(float a, float b, float c)
 {
   float swap;
@@ -2085,6 +2474,12 @@ static float Median3(float a, float b, float c)
 /* 三点中值去除孤立尖峰，再做50点滑动平均；只在有效转换时推进。
  * 初次使用实际读数建窗，不填零；读取失败保留上次结果，
  * 超过5秒无有效转换后，下一次成功读取重新建立窗口。 */
+/**
+ * @brief 依据 ADC 状态更新电池电压滤波与有效性，返回当前滤波结果。
+ * @param status 本次传感器或 ADC 读取状态，用于判断读数是否有效。
+ * @param raw ADC 原始码；指针形式用于接收输出。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 static float BatteryFilter_Update(HAL_StatusTypeDef status, uint32_t raw)
 {
   static float recent[3];
@@ -2131,6 +2526,13 @@ static float BatteryFilter_Update(HAL_StatusTypeDef status, uint32_t raw)
 /* 三点中值后接50点滑动平均，温湿度独立运算并保留小数。
  * 只接受成功且范围有效的测量；断连超过5秒后重新建立窗口。
  * 串口和Flash使用同一结果；超过5秒未更新时均使用无效标记。 */
+/**
+ * @brief 依据读取状态更新温湿度滤波及有效性，抑制孤立异常读数。
+ * @param status 本次传感器或 ADC 读取状态，用于判断读数是否有效。
+ * @param temperature 本次温度读数，单位 °C。
+ * @param humidity 本次相对湿度读数，单位 %RH。
+ * @return 无返回值。
+ */
 static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float humidity)
 {
   static float temperatures[3];
@@ -2185,6 +2587,11 @@ static void ShtFilter_Update(HAL_StatusTypeDef status, float temperature, float 
 
 /* LPS22HH 的有效气压范围约为 260~1260 hPa；这里放宽到 0~2000 hPa，
  * 只过滤通信失败时使用的负无效值和明显异常值。无效采样不进入窗口。 */
+/**
+ * @brief 检查气压值是否落在当前程序接受的有效范围内。
+ * @param pressure_hpa 接收压力结果的输出指针，单位 hPa。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t Pressure_IsValid(float pressure_hpa)
 {
   return (uint8_t)(pressure_hpa > 0.0f && pressure_hpa < 2000.0f);
@@ -2193,6 +2600,12 @@ static uint8_t Pressure_IsValid(float pressure_hpa)
 /* 100 点时间中值滤波后串联两级一阶低通。
  * 在 100 Hz 下每级时间常数为 0.2 秒，中值滤波剔除短暂异常值；
  * 持续阶跃仍可跟踪，只产生平滑延迟，不进行硬限幅。 */
+/**
+ * @brief 将一个 ADC 样本插入时间滤波窗口，更新排序及累计值并返回滤波码值。
+ * @param filter 由本函数更新的滤波状态。
+ * @param sample 传感器快照；const 指针为待写入输入，其他指针为读取输出。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
 {
   uint16_t temp;
@@ -2252,6 +2665,10 @@ static float AdcFilter_Insert(AdcTemporalFilter *filter, uint16_t sample)
 
 /* 在配置的记录时刻保存滤波 ADC 码值快照；RTC 和 Flash 读写
  * 仍在主循环中执行，避免拉长 100 Hz 定时周期。 */
+/**
+ * @brief 检查记录周期并保存待写快照；只在数据就绪时捕获，避免在中断中写 Flash。
+ * @return 无返回值。
+ */
 static void RecordCaptureDue(void)
 {
   uint32_t now = g_record_timer_milliseconds;
@@ -2282,12 +2699,17 @@ static void RecordCaptureDue(void)
 /* 保留一条待写记录；Flash 操作超过一个记录间隔时，下次
  * 记录时刻用最新滤波值替换，避免将过期样本重新写入
  * 并误认为它们是按时采集的数据。 */
+/**
+ * @brief 在主循环将待写快照追加到 Flash，处理写入状态和记录调度。
+ * @return 无返回值。
+ */
 static void RecordWritePending(void)
 {
   DataLogger_Sample sample;
   uint32_t primask;
   uint8_t sht_fresh;
   if (g_recording_enabled == 0U) { g_record_due = 0U; return; }
+  if (g_dump_exclusive) { return; }
   if (g_record_due == 0U || g_adc_diag_active != 0U) { return; }
   primask = __get_PRIMASK();
   __disable_irq();
@@ -2325,6 +2747,10 @@ static void RecordWritePending(void)
  * 自动丢弃两次流水线结果。正常模式 acquisition=100 us，四路扫描
  * 约 2 ms 以内，远小于 10 ms 周期。即使某次 SPI 失败，也保留上一次
  * 已滤波值，保证串口和 W25Q128 永远得到有效的稳定值。 */
+/**
+ * @brief 由 TIM3 中断执行四路 ADC 扫描和滤波，发布主循环可读取的采样快照。
+ * @return 无返回值。
+ */
 void Application_AdcSample100Hz(void)
 {
   uint16_t raw[4];
@@ -2349,6 +2775,12 @@ void Application_AdcSample100Hz(void)
   RecordCaptureDue();
 }
 
+/**
+ * @brief 在临界区复制滤波码和原始码，避免与 ADC 中断并发导致半更新数据。
+ * @param filtered 接收四路滤波 ADC 码值的数组。
+ * @param raw 接收四路 ADC 原始码的数组。
+ * @return 非 0 表示条件成立或操作成功，0 表示条件不成立或失败。
+ */
 static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4])
 {
   uint8_t channel;
@@ -2367,6 +2799,12 @@ static uint8_t Application_AdcGetSnapshot(float filtered[4], uint16_t raw[4])
 
 /* 按最近 50 个有效气压样本计算滑动平均。窗口尚未填满时，按当前有效
  * 样本数计算；传感器暂时失败时保留最近有效平均值。 */
+/**
+ * @brief 更新气压滑动平均窗口，返回当前平均压力。
+ * @param filter 由本函数更新的滤波状态。
+ * @param pressure_hpa 接收压力结果的输出指针，单位 hPa。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
 {
   if (filter == NULL) { return SENSOR_INVALID_FLOAT; }
@@ -2396,6 +2834,10 @@ static float PressureAverage_Update(PressureAverage *filter, float pressure_hpa)
  * 两路实时平均，末尾追加 IN0～IN3 最新有效原始码。W25Q128 中的压力字段
  * 保存 U7/U11 各自的 50 点平均值。 */
 /* 读取一轮所有传感器，按记录周期写 Flash，并按实时格式输出。 */
+/**
+ * @brief 在主循环读取慢速传感器、更新有效性及滤波，并输出实时采样数据。
+ * @return 无返回值。
+ */
 static void Samples_ProcessAndOutput(void)
 {
   uint32_t battery_raw = 0U;
@@ -2547,6 +2989,10 @@ static void Samples_ProcessAndOutput(void)
   * @brief  发生错误时执行此函数。
   * @retval 无
   */
+/**
+ * @brief 关闭中断并停留在错误循环，供无法继续运行的初始化失败调用。
+ * @return 无返回值。
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -2565,6 +3011,12 @@ void Error_Handler(void)
   * @param  line: assert_param 错误所在的源代码行号。
   * @retval 无
   */
+/**
+ * @brief 接收 HAL 参数断言失败的位置；当前实现预留给调试，不自动恢复。
+ * @param file 触发断言的源文件名。
+ * @param line 触发断言的源文件行号。
+ * @return 无返回值。
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

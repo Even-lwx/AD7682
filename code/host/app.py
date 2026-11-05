@@ -1,4 +1,6 @@
-"""AD7682 desktop capture application. Run app.py or packaged AD7682Host.exe."""
+"""上位机界面与事件调度。
+
+AD7682 desktop capture application. Run app.py or packaged AD7682Host.exe."""
 import argparse
 import queue
 import time
@@ -12,13 +14,21 @@ from datetime_picker import DateTimePicker
 
 
 class App:
+    """本模块的 App 数据和行为封装。"""
     def __init__(self, root, demo=False):
+        """初始化本对象的状态、缓存及所需资源；参数含义见下方。
+
+        参数：
+        root：Tk 主窗口。
+        demo：是否启用纯软件演示。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.root = root
         self.events = queue.Queue()
         self.device = None
         self.points = deque(maxlen=350)
         self.busy = False
-        root.title("AD7682 数据采集 · CRC 可靠传输")
+        root.title("AD7682 数据采集 v1.4 · 流式 CRC32 批量导出")
         root.geometry("1120x800")
         root.minsize(950, 710)
         root.configure(bg="#eef2f6")
@@ -65,6 +75,7 @@ class App:
         self.order = tk.StringVar(value="从旧到新")
         ttk.Combobox(dump, textvariable=self.order, values=["从旧到新", "从新到旧"], state="readonly", width=13).grid(row=0, column=1, padx=(0, 12))
         self.range_enabled = tk.BooleanVar()
+        self.batch_size = tk.StringVar(value="100")
         ttk.Checkbutton(dump, text="指定时间段（包含起止时刻）", variable=self.range_enabled).grid(row=0, column=2, columnspan=2, sticky="w")
         now = datetime.now().replace(microsecond=0)
         ttk.Label(dump, text="开始").grid(row=1, column=0, sticky="w", pady=(8, 0))
@@ -74,6 +85,11 @@ class App:
         self.end_time = DateTimePicker(dump, now)
         self.end_time.grid(row=2, column=1, columnspan=3, pady=(8, 0), sticky="w")
         ttk.Button(dump, text="今天 00:00 → 现在", command=self.reset_export_time).grid(row=2, column=4, padx=(12, 0), pady=(8, 0))
+        batch = ttk.Frame(dump)
+        batch.grid(row=3,column=0,columnspan=5,sticky="w",pady=(8,0))
+        ttk.Label(batch,text="整批校验条数").pack(side="left")
+        ttk.Combobox(batch,textvariable=self.batch_size,values=["100","1000"],state="readonly",width=6).pack(side="left",padx=8)
+        ttk.Label(batch,text="每批一次 CRC32；错误整批重发，1000 条适合稳定链路").pack(side="left")
         self.dump_button = ttk.Button(dump, text="导出历史 CSV…", command=self.dump)
         self.dump_button.grid(row=0, column=4, rowspan=2, padx=(20, 0))
         dump.columnconfigure(4, weight=1)
@@ -134,6 +150,9 @@ class App:
             root.after(200, self.connect)
 
     def refresh(self):
+        """刷新可用串口列表，并保留仍有效的当前选择。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         from serial.tools import list_ports
         devices = list(list_ports.comports())
         devices.sort(key=lambda item: (0 if "CH343" in (item.description or "").upper() else 1,
@@ -144,6 +163,12 @@ class App:
             self.port.set(ports[0] if ports else "DEMO")
 
     def enable(self, ready):
+        """根据连接状态更新界面控件是否可操作。
+
+        参数：
+        ready：设备是否已就绪。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         for button in (self.dump_button, self.live_button, self.info_button) + self.config_buttons:
             button.configure(state="normal" if ready and not self.busy else "disabled")
         for entry in self.config_entries:
@@ -152,11 +177,17 @@ class App:
         self.save_button.configure(state="normal" if ready else "disabled")
 
     def connect(self):
+        """切换连接状态；连接时启动设备线程，断开时等待资源释放。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if self.device and not self.device.finished:
             self.device.command("disconnect")
             self.connect_button.configure(state="disabled")
             self.state.set("正在关闭上一次串口连接，请稍候…")
             return
+        # A prior worker may have queued final stats/error events. A new
+        # connection owns its event queue so stale events cannot change it.
+        self.events = queue.Queue()
         self.device = Device(self.events)
         self.device.start(self.port.get(), int(self.baud.get()))
         self.state.set("连接中，等待 CRC 协议握手…" + ("【演示数据】" if self.port.get() == "DEMO" else ""))
@@ -166,6 +197,9 @@ class App:
         self.refresh_button.configure(state="disabled")
 
     def dump(self):
+        """读取导出选项与时间范围，校验后把历史导出任务交给设备线程。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         interval = ""
         if self.range_enabled.get():
             try:
@@ -182,14 +216,20 @@ class App:
             self.enable(True)
             self.state.set("历史导出中；仅接收通过 CRC 的数据。中途断开将保留 .part 文件。")
             self.points.clear()
-            self.device.command("dump", (target, "raw" if self.mode.get() == "ADC 数值" else "hpa", "old" if self.order.get() == "从旧到新" else "new", interval))
+            self.device.command("dump", (target, "raw" if self.mode.get() == "ADC 数值" else "hpa", "old" if self.order.get() == "从旧到新" else "new", interval, int(self.batch_size.get())))
 
     def reset_export_time(self):
+        """把历史时间范围设为电脑当天零点至当前时刻。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         now = datetime.now().replace(microsecond=0)
         self.start_time.set(now.replace(hour=0, minute=0, second=0))
         self.end_time.set(now)
 
     def save(self):
+        """选择 CSV 保存位置，并把当前采集文件快照导出任务交给设备线程。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         target = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")], initialfile="AD7682-capture.csv")
         if target:
             if self.busy and not messagebox.askyesno("导出仍在进行", "这会保存截至当前收到的数据快照，不能代表完整历史。是否继续？"):
@@ -197,22 +237,38 @@ class App:
             self.device.command("export", target)
 
     def live(self):
+        """请求开始新的实时数据采集文件。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.points.clear()
         self.device.command("live")
         self.state.set("实时采集中" + ("【演示数据】" if self.port.get() == "DEMO" else ""))
 
     def info(self):
+        """请求读取设备 Flash 状态。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.busy = True
         self.enable(True)
         self.device.command("info")
 
     def configure_device(self, kind, value=None):
+        """将设备设置类型与值提交给后台线程。
+
+        参数：
+        kind：配置或事件类型。
+        value：配置值或事件负载。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.busy = True
         self.enable(True)
         self.state.set("正在等待 MCU 执行并确认设备设置…")
         self.device.command("configure", (kind, value))
 
     def set_interval(self):
+        """校验界面记录间隔并提交保存任务。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         try:
             value = interval_seconds(self.interval.get())
         except ValueError as exc:
@@ -221,9 +277,15 @@ class App:
         self.configure_device("interval", value)
 
     def set_order(self):
+        """提交界面选定的历史输出顺序。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.configure_device("order", "old" if self.order.get() == "从旧到新" else "new")
 
     def set_rtc(self):
+        """校验输入日期时间并提交 RTC 校时任务。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         try:
             value = rtc_datetime(self.rtc.get()).strftime("%Y-%m-%d %H:%M:%S")
         except ValueError as exc:
@@ -232,10 +294,19 @@ class App:
         self.configure_device("rtc", value)
 
     def clear_logs(self):
+        """显示清空确认框，用户确认后提交 Flash 日志清空任务。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if messagebox.askyesno("确认清空 MCU 日志", "将清空 MCU Flash 中的全部历史记录，无法恢复。\n已保存到电脑的 CSV 文件不受影响。\n如果设备记录开启，清空后会继续写入新记录。\n\n确定清空吗？", icon="warning", default="no"):
             self.configure_device("clear")
 
     def show_device_info(self, info):
+        """把回读的设备日志状态填入界面。
+
+        参数：
+        info：设备回读状态字典。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         order = "从旧到新" if info["order"] == "oldest-first" else "从新到旧"
         self.interval.set(info["interval"])
         self.order.set(order)
@@ -243,6 +314,12 @@ class App:
                                f"顺序 {order}；记录{'开启' if info['recording'] == 'on' else '关闭'}")
 
     def add_log(self, text):
+        """追加通信提示，并限制界面日志长度。
+
+        参数：
+        text：命令、数据或提示文本。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         self.log.configure(state="normal")
         self.log.insert("end", time.strftime("%H:%M:%S ") + text + "\n")
         if int(self.log.index("end-1c").split(".")[0]) > 400:
@@ -251,6 +328,12 @@ class App:
         self.log.configure(state="disabled")
 
     def plot(self, values):
+        """更新有限长度的实时曲线缓存并重绘画布。
+
+        参数：
+        values：当前采样值列表。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if len(values) not in (15, 18):
             return
         offset = 10 if len(values) == 15 else 7
@@ -272,6 +355,9 @@ class App:
     def poll(self):
         # 限制每次队列处理量：长时间导出时，生产者填充队列的速度可能超过 Tk
         # 的渲染速度，因此必须始终让出执行权给窗口事件循环。
+        """在 Tk 主线程消费后台事件，更新连接、统计、图表和错误提示。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         deadline = time.monotonic() + 0.015
         try:
             for _ in range(80):
@@ -283,8 +369,9 @@ class App:
                     self.enable(True)
                     self.state.set("CRC 可靠连接已建立" + ("【DEMO 演示数据，不是实际测量】" if self.port.get() == "DEMO" else ""))
                 elif kind == "stats":
-                    rows, bad, nacks, dup, values = value
-                    self.stats.set(f"有效数据 {rows:,}     校验异常 {bad}     重发请求 {nacks}     重复帧 {dup}")
+                    rows, bad, nacks, dup, values, rate = value
+                    self.stats.set(f"有效数据 {rows:,}     校验异常 {bad}     重发请求 {nacks}     重复帧 {dup}"
+                                   + (f"     导出 {rate:.0f} 条/秒" if rate is not None else ""))
                     if values:
                         if len(values) in (15, 18):
                             offset = 10 if len(values) == 15 else 7
@@ -303,6 +390,11 @@ class App:
                     self.add_log(self.state.get())
                 elif kind == "saved":
                     self.add_log("CSV 已保存：" + value)
+                elif kind == "sampling":
+                    if not value:
+                        self.state.set("独占导出中：所有传感器采样及新记录已暂停，完成后自动恢复")
+                    elif self.busy:
+                        self.state.set("MCU 已恢复采样，正在完成导出收尾…")
                 elif kind == "device_info":
                     self.show_device_info(value)
                 elif kind == "config_result":
@@ -335,6 +427,9 @@ class App:
         self.root.after(100, self.poll)
 
     def close(self):
+        """请求停止后台线程，等待串口释放后关闭界面。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if self.device and not self.device.finished:
             if self.busy and not messagebox.askyesno("操作进行中", "正在导出或修改设备设置。退出后当前操作的结果可能需要重新连接确认，是否退出？"):
                 return
@@ -344,6 +439,9 @@ class App:
             self.root.destroy()
 
     def wait_close(self):
+        """轮询后台线程是否已释放串口，完成后销毁主窗口。
+
+        返回：无返回值；结果通过对象状态、文件或事件通知。"""
         if not self.device.finished:
             self.root.after(100, self.wait_close)
         else:

@@ -58,6 +58,10 @@
 /**
   * 初始化全局 MSP。
   */
+/**
+ * @brief 配置 HAL 公共底层资源及系统中断相关设置。
+ * @return 无返回值。
+ */
 void HAL_MspInit(void)
 {
   /* USER CODE BEGIN MspInit 0 */

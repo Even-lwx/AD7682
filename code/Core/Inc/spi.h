@@ -38,7 +38,15 @@ extern SPI_HandleTypeDef hspi2;
 
 /* USER CODE END Private defines */
 
+/**
+ * @brief 初始化 SPI1 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_SPI1_Init(void);
+/**
+ * @brief 初始化 SPI2 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_SPI2_Init(void);
 
 /* USER CODE BEGIN Prototypes */

@@ -27,6 +27,10 @@ DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USART1 初始化函数。 */
 
+/**
+ * @brief 初始化 USART1_UART 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_USART1_UART_Init(void)
 {
 
@@ -73,6 +77,11 @@ void MX_USART1_UART_Init(void)
 
 }
 
+/**
+ * @brief 为对应外设配置底层时钟、GPIO、DMA 或中断资源。
+ * @param uartHandle 需要初始化或释放底层资源的 UART 外设句柄。
+ * @return 无返回值。
+ */
 void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 {
 
@@ -131,6 +140,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
   }
 }
 
+/**
+ * @brief 释放对应外设的底层时钟、GPIO、DMA 或中断资源。
+ * @param uartHandle 需要初始化或释放底层资源的 UART 外设句柄。
+ * @return 无返回值。
+ */
 void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 {
 

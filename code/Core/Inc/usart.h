@@ -37,6 +37,10 @@ extern DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE END Private defines */
 
+/**
+ * @brief 初始化 USART1_UART 的工程参数、引脚及相关外设配置。
+ * @return 无返回值。
+ */
 void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */

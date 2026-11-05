@@ -18,6 +18,13 @@ names={'I6':'温度 (°C)','I7':'湿度 (%)','I8':'U7数字气压 (hPa)','I9':'U
 plt.rcParams['font.sans-serif']=['Microsoft YaHei','SimHei','DejaVu Sans']; plt.rcParams['axes.unicode_minus']=False
 
 def savefig(fig, name):
+    """保存统计图并关闭图对象，返回图片的 Base64 文本。
+
+    参数：
+    fig：待保存的 matplotlib 图对象。
+    name：任务名或待提取函数名。
+
+    返回：提取或格式化后的文本。"""
     p=out/name; fig.savefig(p,dpi=160,bbox_inches='tight'); plt.close(fig)
     return base64.b64encode(p.read_bytes()).decode()
 # 第一部分：压力数据对齐
@@ -61,10 +68,18 @@ for lab,a,b in cycles:
 # HTML 页面
 
 def fmt(v):
+ """格式化报告单元格，返回三位小数文本或空串。"""
  if pd.isna(v): return ''
  if isinstance(v,(float,np.floating)): return f'{v:.3f}'
  return str(v)
 def table(rows, keys):
+ """把统计数据转换为报告中的 HTML 表格。
+
+ 参数：
+ rows：测试输入，约束见调用处及断言。
+ keys：测试输入，约束见调用处及断言。
+
+ 返回：提取或格式化后的文本。"""
  h='<table><tr>'+''.join(f'<th>{k}</th>' for k in keys)+'</tr>'
  for r in rows: h+='<tr>'+''.join(f'<td>{fmt(r.get(k,""))}</td>' for k in keys)+'</tr>'
  return h+'</table>'

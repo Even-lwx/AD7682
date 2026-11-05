@@ -327,6 +327,12 @@ extern "C" {
   */
 #define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
 /* 对外提供的函数。 */
+/**
+ * @brief 接收 HAL 参数断言失败的位置；当前实现预留给调试，不自动恢复。
+ * @param file 触发断言的源文件名。
+ * @param line 触发断言的源文件行号。
+ * @return 无返回值。
+ */
 void assert_failed(uint8_t *file, uint32_t line);
 #else
 #define assert_param(expr) ((void)0U)

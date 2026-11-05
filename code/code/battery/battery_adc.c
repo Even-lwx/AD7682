@@ -15,6 +15,12 @@
 #define BATTERY_ADC_CAL_GAIN_V_PER_COUNT \
     (BATTERY_ADC_PIN_GAIN_V_PER_COUNT * BATTERY_DIVIDER_RATIO)
 
+/**
+ * @brief 兼容旧接口读取电池 ADC；失败返回 0，需区分错误时使用 ReadRawChecked。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return ADC 原始码；读取失败也返回 0。
+ */
 uint32_t BatteryAdc_ReadRaw(ADC_HandleTypeDef *handle, uint32_t timeout)
 {
     uint32_t value = 0U;
@@ -22,6 +28,13 @@ uint32_t BatteryAdc_ReadRaw(ADC_HandleTypeDef *handle, uint32_t timeout)
     return value;
 }
 
+/**
+ * @brief 启动内部 ADC、等待转换并停止 ADC，成功后提交原始码。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param raw ADC 原始码；指针形式用于接收输出。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return HAL_OK 成功；其他 HAL 状态表示参数、外设或存储操作失败。
+ */
 HAL_StatusTypeDef BatteryAdc_ReadRawChecked(ADC_HandleTypeDef *handle,
                                           uint32_t *raw, uint32_t timeout)
 {
@@ -42,6 +55,14 @@ HAL_StatusTypeDef BatteryAdc_ReadRawChecked(ADC_HandleTypeDef *handle,
     return HAL_OK;
 }
 
+/**
+ * @brief 读取内部 ADC，按参考电压和电阻分压比换算电池端电压。
+ * @param handle 外设或软件总线句柄，须由调用者正确初始化。
+ * @param vref ADC 参考电压，单位 V。
+ * @param divider_ratio 电池端电压与 ADC 引脚电压的比例。
+ * @param timeout 底层事务超时，单位 ms；不是整个上层操作的总时间上限。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 float BatteryAdc_ReadVoltage(ADC_HandleTypeDef *handle, float vref,
                              float divider_ratio, uint32_t timeout)
 {
@@ -50,6 +71,11 @@ float BatteryAdc_ReadVoltage(ADC_HandleTypeDef *handle, float vref,
     return ((float)raw * vref / 4095.0f) * divider_ratio;
 }
 
+/**
+ * @brief 按 3.3 V 参考、12 位 ADC 和 100k/47k 分压电阻计算电池电压。
+ * @param raw ADC 原始码；指针形式用于接收输出。
+ * @return 计算后的值，量纲与用途说明一致。
+ */
 float BatteryAdc_CalibratedVoltage(uint32_t raw)
 {
     /* 保留接口名；现按3.3 V及100k/47k分压输出电池端电压。 */
