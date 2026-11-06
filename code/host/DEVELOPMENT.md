@@ -106,13 +106,13 @@ python code\host\verify_exclusive.py
 ```powershell
 python -m PyInstaller --noconfirm --clean --windowed --onefile `
   --name AD7682Host `
-  --distpath output\AD7682Host-dev `
+  --distpath output\releases\AD7682Host-dev `
   --workpath tmp\host-build `
   --specpath tmp `
   code\host\app.py
 ```
 
-生成文件为 `output\AD7682Host-dev\AD7682Host.exe`。打包前先运行演示模式和全部测试；打包后应在没有 Python 开发环境的 Windows 电脑上验证界面、真实连接和 CSV 导出。
+生成文件为 `output\releases\AD7682Host-dev\AD7682Host.exe`。打包前先运行演示模式和全部测试；打包后应在没有 Python 开发环境的 Windows 电脑上验证界面、真实连接和 CSV 导出。
 
 EXE 与 `AD7682_crc.hex` 必须来自同一协议版本。协议不匹配时，旧固件只能回退到逐条或 16 条窗口模式，不能宣称使用了最新批量功能。
 

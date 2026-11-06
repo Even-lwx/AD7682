@@ -15,7 +15,23 @@ STM32G031C8 固件负责四路 AD7682、温湿度、双气压计、电池、RTC�
 
 ## 目录约定
 
-`doc/` 保存器件资料，`pcb/` 保存硬件设计，`code/` 保存固件与上位机源码。`code/log/` 为实测数据，`output/` 为导出结果与发布包，`tmp/` 为本机临时构建和验证产物。根目录分析脚本用于既有测量报告，包含固定输入路径，运行前须核对目标数据。
+| 目录 | 用途 |
+| --- | --- |
+| `code/` | 固件与上位机源码；`code/log/` 保留原始实测数据 |
+| `pcb/` | 各版本原理图、PCB、元件库与生产资料 |
+| `doc/` | 正式器件数据手册 |
+| `tools/analysis/` | 历史测量分析和报告生成脚本 |
+| `tools/analysis/workspace/` | 从原 `tmp/` 整理的历史分析工作区，保留测试源码与报告依赖 |
+| `data/measurements/` | 原始测量工作簿 |
+| `output/reports/` | 实验报告、图表及统计结果 |
+| `output/releases/` | 上位机各版本发布目录和压缩包 |
+| `archive/source_snapshots/` | 旧版源码压缩快照 |
+| `archive/reference_downloads/` | 历史下载文件，使用前核对完整性；不替代正式手册 |
+| `archive/extracted_reference/` | 已有版本记录的手册提取文本与截图，保留供历史复核 |
+
+历史分析脚本包含固定测试日期和数据列假设，应在本工程根目录运行，例如 `python tools/analysis/analyze.py`。`append_pressure.py` 会改写所选 CSV，使用前保留原始数据。历史工作区中更新源码注释、修改报告或生成代码的脚本不是日常入口，请先阅读脚本再运行。
+
+根目录 `README.md`、`.gitignore` 是工程说明和忽略配置，应保留。Python 缓存、Altium 预览及运行日志可再生成；Altium `History/` 备份和 `Project Outputs*/` 生产输出保留。后续打包或验证可能重新生成 `tmp/`，该目录只存本次运行的临时结果。
 
 ## 注释约定
 

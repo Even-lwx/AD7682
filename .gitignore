@@ -59,3 +59,27 @@ analysis_output*/
 
 # 本地测量工作簿
 LP5907_3-2V电压变化.xlsx
+
+# 整理后的本地测量表、旧源码包和历史下载
+/data/measurements/*.xlsx
+/archive/source_snapshots/
+/archive/reference_downloads/
+
+# 历史分析工作区仅提交可维护源码与报告运行所需的脚本依赖
+/tools/analysis/workspace/*
+!/tools/analysis/workspace/**/
+!/tools/analysis/workspace/**/*.py
+!/tools/analysis/workspace/**/*.c
+!/tools/analysis/workspace/**/*.h
+!/tools/analysis/workspace/**/*.ps1
+!/tools/analysis/workspace/**/*.cjs
+!/tools/analysis/workspace/**/*.spec
+/tools/analysis/workspace/**/node_modules/
+/tools/analysis/workspace/**/__pycache__/
+/tools/analysis/workspace/**/*.png
+/tools/analysis/workspace/**/*.pdf
+/tools/analysis/workspace/**/*.txt
+/tools/analysis/workspace/**/*.json
+/tools/analysis/workspace/**/*.jsonl
+/tools/analysis/workspace/**/*.js
+!/tools/analysis/workspace/syringe_reports/plotly.min.js

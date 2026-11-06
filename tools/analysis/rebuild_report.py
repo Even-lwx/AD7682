@@ -2,9 +2,9 @@ import pandas as pd, numpy as np, matplotlib.pyplot as plt, base64, io, json
 from pathlib import Path
 from datetime import datetime
 
-root=Path(r'D:/lwx/lwx-project/AD7682')
+root=Path(__file__).resolve().parents[2]
 csvp=root/'code/log/10301415_针筒第一次测试.csv'
-out=root/'output/针筒第一次测试_10301415'
+out=root/'output/reports/针筒第一次测试_10301415'
 out.mkdir(parents=True, exist_ok=True)
 cols=[f'I{i}' for i in range(15)]
 df=pd.read_csv(csvp)

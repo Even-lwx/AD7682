@@ -2,6 +2,14 @@
 
 开发环境、虚拟环境安装、测试和 EXE 打包流程见 [上位机开发文档](DEVELOPMENT.md)。
 
+## 源码在哪里
+
+源码完整目录：`D:\lwx\lwx-project\AD7682\code\host\`，界面启动入口为 `app.py`。
+
+在 AD7682 工程根目录运行 `python code/host/app.py`；演示运行加 `--demo`。首次使用按开发文档安装依赖。`device.py` 负责串口与设备交互，`protocol.py` 负责校验、接收与 CSV，`datetime_picker.py` 负责日期时间控件。
+
+已打包 EXE 位于工程内 `output/releases/` 的各版本目录；修改源码后需要重新打包，已有 EXE 不会自动变化。
+
 支持 Windows 串口实时接收、CRC-16/MODBUS 校验、单次自动重发、Flash 按时间段导出及 VOFA 格式 CSV。安装包里的 EXE 可直接运行，无需安装 Python。
 
 ## 开始使用
@@ -96,7 +104,7 @@ python code/host/verify_exclusive.py
 打包：
 
 ```powershell
-python -m PyInstaller --noconfirm --windowed --onefile --name AD7682Host --distpath output/AD7682Host-v1.4 --workpath tmp/host-build --specpath tmp code/host/app.py
+python -m PyInstaller --noconfirm --windowed --onefile --name AD7682Host --distpath output/releases/AD7682Host-v1.4 --workpath tmp/host-build --specpath tmp code/host/app.py
 ```
 
 实际导出条/秒以连接设备后的界面为准；软件仿真不代替实板测速与采样恢复检查。
