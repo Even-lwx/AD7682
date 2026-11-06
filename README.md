@@ -12,6 +12,11 @@ STM32G031C8 固件负责四路 AD7682、温湿度、双气压计、电池、RTC�
 - ADC 当前滤波：[滤波说明](code/code/ad7682/FILTER_CURRENT.md)。
 - 电池换算：[电池说明](code/code/battery/CALIBRATION.md)。
 - 旧 ADC 实验：[历史目录](code/docs/archive/README.md)，仅用于回溯实验。
+- Ver1.2 电路工作状态与电阻关系：[专用说明表](doc/电路工作状态与电阻对应关系.xlsx)，适用于 `pcb/AD7682-Ver1.2-ADC供电传感器供电改为5V/`。
+
+## 硬件版本说明
+
+`doc/电路工作状态与电阻对应关系.xlsx` 是 **Ver1.2 专用说明**，用于查阅该版电路工作状态与电阻的对应关系。核对时应配合 Ver1.2 的原理图与 PCB；其他硬件版本需分别核对，不能直接沿用该表。
 
 ## 目录约定
 
@@ -19,7 +24,7 @@ STM32G031C8 固件负责四路 AD7682、温湿度、双气压计、电池、RTC�
 | --- | --- |
 | `code/` | 固件与上位机源码；`code/log/` 保留原始实测数据 |
 | `pcb/` | 各版本原理图、PCB、元件库与生产资料 |
-| `doc/` | 正式器件数据手册 |
+| `doc/` | 器件数据手册与硬件说明；Ver1.2 电阻关系表适用范围见上文 |
 | `tools/analysis/` | 历史测量分析和报告生成脚本 |
 | `tools/analysis/workspace/` | 从原 `tmp/` 整理的历史分析工作区，保留测试源码与报告依赖 |
 | `data/measurements/` | 原始测量工作簿 |
