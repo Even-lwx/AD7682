@@ -309,9 +309,15 @@ class Device:
             return
         if value == f"LINK CRC ON {self.session:08X}":
             self.ready = True
-            self.phase = ""
-            self.line("exit")
-            self.event("ready", True)
+            if self._retrying_dump and self.dump:
+                self.phase = "setting"
+                self.deadline = time.monotonic() + 4
+                self.event("log", "串口已恢复，自动重新开始本次历史导出")
+                self.line("setting")
+            else:
+                self.phase = ""
+                self.line("exit")
+                self.event("ready", True)
         elif self.phase == "setting" and value == "SETTING MODE":
             self.phase = "order"
             self.deadline = time.monotonic() + 4
@@ -355,7 +361,60 @@ class Device:
         elif self.dump and ("ERROR" in value):
             raise OSError(value)
 
+    def _prepare_dump_retry(self):
+        """清理一次失败的历史临时文件，准备从 Flash 快照重新导出。
+
+        当前协议的 MCU 导出序号从快照起点开始，电脑端不能把新会话收到的
+        行直接追加到旧文件，否则会产生重复记录。因此自动重连时丢弃未完成
+        的 .part 文件并重新建立文件，完整导出成功后才替换目标 CSV。
+        """
+        if self.capture:
+            old_path = self.capture.path
+            try:
+                self.capture.close()
+            except OSError:
+                pass
+            try:
+                if old_path.exists():
+                    old_path.unlink()
+            except OSError:
+                pass
+        self.phase = ""
+        self.rx = None
+        self._retrying_dump = True
+
     def run(self, port, baud):
+        """运行串口线程；历史导出断线时自动重连并重试，最多三次。
+
+        普通连接或设备设置失败仍按原流程报告错误。历史导出期间如果串口
+        暂时断开，后台线程会关闭旧句柄、等待后重新握手，并自动重新发送
+        原来的导出参数；三次均失败后才通知界面中止。
+        """
+        self.last = []
+        self.activity = time.monotonic()
+        self.running = True
+        self.finished = False
+        self._retrying_dump = False
+        attempts = 0
+        while self.running:
+            self.last_error = None
+            self._run_once(port, baud)
+            if not self.last_error or not self.dump or attempts >= 3 or not self.running:
+                break
+            attempts += 1
+            self.event("reconnecting", (attempts, 3, str(self.last_error)))
+            self._prepare_dump_retry()
+            time.sleep(min(2.0, 0.5 * attempts))
+        self.ready = self.running = False
+        self.finished = True
+        if self.last_error:
+            if attempts >= 3 and self.dump:
+                self.event("error", f"串口断开，自动重试 {attempts} 次后仍未恢复：{self.last_error}")
+            else:
+                self.event("error", str(self.last_error))
+        self.event("disconnected", None)
+
+    def _run_once(self, port, baud):
         """在后台线程打开串口、读写协议与任务，退出时关闭串口和采集文件。
 
         参数：
@@ -366,6 +425,7 @@ class Device:
         self.last = []
         self.activity = time.monotonic()
         self.serial = None
+        self.last_error = None
         try:
             if port == "DEMO":
                 from demo import DemoSerial
@@ -436,9 +496,9 @@ class Device:
                         except ValueError as exc:
                             self.finish_config(False, str(exc))
         except Exception as exc:
-            self.event("error", str(exc))
+            self.last_error = exc
         finally:
-            self.ready = self.running = False
+            self.ready = False
             if self.serial:
                 try:
                     self.line("link crc off")
@@ -453,5 +513,4 @@ class Device:
                     self.capture.close()
                 except OSError as exc:
                     self.event("error", str(exc))
-            self.finished = True
-            self.event("disconnected", None)
+            # 由外层 run() 决定是否自动重连；这里不能提前发送 disconnected。

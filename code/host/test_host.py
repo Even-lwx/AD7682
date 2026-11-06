@@ -380,6 +380,50 @@ class IntegrationTests(unittest.TestCase):
                     time.sleep(0.02)
                 self.assertTrue(device.finished)
 
+    def test_dump_reconnects_and_restarts_after_serial_loss(self):
+        """验证历史导出遇到串口断开时自动重连并重新完成，不要求用户重新点击导出。"""
+        from demo import DemoSerial
+
+        created = []
+
+        class DropOnce(DemoSerial):
+            """第一次实例在已发送部分历史后模拟 USB 串口断开。"""
+            def read(self, size):
+                if self.history is not None and self.count >= 100 and not self.dropped:
+                    self.dropped = True
+                    raise OSError("模拟 CH343 接触不良")
+                return super().read(size)
+
+            def __init__(self):
+                super().__init__()
+                self.dropped = False
+
+        def factory():
+            serial = DropOnce() if not created else DemoSerial()
+            created.append(serial)
+            return serial
+
+        with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", {"LOCALAPPDATA": folder}), patch("demo.DemoSerial", factory):
+            events = queue.Queue()
+            device = Device(events)
+            device.start("DEMO", 921600)
+            try:
+                self.wait_event(events, "ready")
+                target = Path(folder) / "reconnect.csv"
+                device.command("dump", (str(target), "raw", "old", "", 100))
+                done = self.wait_event(events, "done", seconds=15)
+                self.assertTrue(done[0])
+                self.assertEqual(done[2], 1000)
+                self.assertGreaterEqual(len(created), 2)
+                with target.open(newline="") as stream:
+                    self.assertEqual(len(list(csv.reader(stream))) - 1, 1000)
+            finally:
+                device.command("disconnect")
+                until = time.monotonic() + 3
+                while not device.finished and time.monotonic() < until:
+                    time.sleep(0.02)
+                self.assertTrue(device.finished)
+
     def test_missing_clear_reply_is_unknown_and_not_retried(self):
         """确认清空响应丢失时报告未知结果且不重发命令。无参数；断言失败抛出测试异常，无返回值。"""
         from demo import DemoSerial

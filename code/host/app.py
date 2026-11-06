@@ -214,7 +214,7 @@ class App:
         if target:
             self.busy = True
             self.enable(True)
-            self.state.set("历史导出中；仅接收通过 CRC 的数据。中途断开将保留 .part 文件。")
+            self.state.set("历史导出中；仅接收通过 CRC 的数据。短暂断线会自动重连并重试。")
             self.points.clear()
             self.device.command("dump", (target, "raw" if self.mode.get() == "ADC 数值" else "hpa", "old" if self.order.get() == "从旧到新" else "new", interval, int(self.batch_size.get())))
 
@@ -395,6 +395,10 @@ class App:
                         self.state.set("独占导出中：所有传感器采样及新记录已暂停，完成后自动恢复")
                     elif self.busy:
                         self.state.set("MCU 已恢复采样，正在完成导出收尾…")
+                elif kind == "reconnecting":
+                    attempt, maximum, reason = value
+                    self.state.set(f"导出串口暂时断开，正在自动重连（第 {attempt}/{maximum} 次）…")
+                    self.add_log(f"串口暂时断开，自动重连 {attempt}/{maximum}：{reason}")
                 elif kind == "device_info":
                     self.show_device_info(value)
                 elif kind == "config_result":
